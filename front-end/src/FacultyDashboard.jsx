@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CreateClassForm from './CreateClassForm';
 
@@ -8,31 +8,74 @@ const FacultyDashboard = () => {
   const [classes, setClasses] = useState([]);
   const [activeSection, setActiveSection] = useState('classes');
   const [facultyId, setFacultyId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Get faculty ID from localStorage or session
     const faculty = JSON.parse(localStorage.getItem('faculty'));
     if (faculty?._id) {
       setFacultyId(faculty._id);
-      fetchClasses(faculty._id);
+      if (activeSection === 'my-classes') {
+        fetchClasses(faculty._id);
+      }
     }
-  }, []);
+  }, [activeSection]);
 
   const fetchClasses = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/faculty/classes/${id}`);
+      setIsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/faculty/classes/${id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
-        setClasses(data);
+        console.log('Fetched classes:', data);
+        setClasses(data.classes || []);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to fetch classes:', errorData);
+        setClasses([]);
       }
     } catch (error) {
       console.error('Error fetching classes:', error);
+      setClasses([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleClassCreated = (newClass) => {
     setClasses(prevClasses => [...prevClasses, newClass]);
     setShowCreateClass(false);
+    const faculty = JSON.parse(localStorage.getItem('faculty'));
+    if (faculty?._id) {
+      fetchClasses(faculty._id);
+    }
+  };
+
+  const handleClassClick = (classId) => {
+    // Navigate to class details page or show class details modal
+    console.log('Class clicked:', classId);
+    // You can add navigation here using React Router
+    // navigate(`/class/${classId}`);
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.clear(); // Clear all localStorage items
+      // or if you want to be specific:
+      // localStorage.removeItem('faculty');
+      // localStorage.removeItem('token');
+      navigate('/', { replace: true }); // Use replace to prevent going back
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
   };
 
   const renderMainContent = () => {
@@ -136,6 +179,23 @@ const FacultyDashboard = () => {
         return (
           <div className="p-8">
             <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-bold">Create New Class</h1>
+              <button 
+                onClick={() => setShowCreateClass(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Create Class
+              </button>
+            </div>
+          </div>
+        );
+      case 'my-classes':
+        return (
+          <div className="p-8">
+            <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold">My Classes</h1>
               <button 
                 onClick={() => setShowCreateClass(true)}
@@ -148,7 +208,11 @@ const FacultyDashboard = () => {
               </button>
             </div>
 
-            {classes.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center items-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : classes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl">
                 <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                   <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +222,10 @@ const FacultyDashboard = () => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">No classes created yet</h2>
                 <p className="text-gray-500 mb-8">Create your first class to get started</p>
                 <button 
-                  onClick={() => setShowCreateClass(true)}
+                  onClick={() => {
+                    setActiveSection('classes');
+                    setShowCreateClass(true);
+                  }}
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +239,8 @@ const FacultyDashboard = () => {
                 {classes.map((classItem) => (
                   <div 
                     key={classItem._id}
-                    className="bg-white rounded-xl p-6 border border-slate-200 hover:border-blue-200 transition-colors shadow-sm hover:shadow-md"
+                    className="bg-white rounded-xl p-6 border border-slate-200 hover:border-blue-200 transition-colors shadow-sm hover:shadow-md cursor-pointer"
+                    onClick={() => handleClassClick(classItem._id)}
                   >
                     <div className="flex items-center gap-4 mb-4">
                       <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -182,6 +250,7 @@ const FacultyDashboard = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg">{classItem.className}</h3>
+                        <p className="text-sm text-slate-500">{classItem.subject}</p>
                       </div>
                     </div>
                     <p className="text-slate-600 text-sm mb-4">{classItem.description}</p>
@@ -234,10 +303,29 @@ const FacultyDashboard = () => {
             Profile
           </button>
           
+          {/* Classes Section Header */}
+          <div className="px-4 pt-4 pb-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Classes</h3>
+          </div>
+          
           <button
             onClick={() => setActiveSection('classes')}
             className={`flex w-full items-center gap-3 px-4 py-2 ${
               activeSection === 'classes' 
+                ? 'text-blue-600 bg-blue-50' 
+                : 'text-slate-700 hover:bg-slate-50'
+            } rounded-lg`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Create Class
+          </button>
+
+          <button
+            onClick={() => setActiveSection('my-classes')}
+            className={`flex w-full items-center gap-3 px-4 py-2 ${
+              activeSection === 'my-classes' 
                 ? 'text-blue-600 bg-blue-50' 
                 : 'text-slate-700 hover:bg-slate-50'
             } rounded-lg`}
@@ -250,10 +338,26 @@ const FacultyDashboard = () => {
         </nav>
 
         <div className="fixed bottom-4 left-4 w-56">
-          <div className="flex items-center gap-3 px-4 py-2">
-            <div className="flex-1">
-              <div className="font-medium">Mr.Kr.Senthil murugan</div>
-              <div className="text-sm text-slate-500">senthil.murugan@vcet.edu</div>
+          <div className="p-4 bg-white rounded-xl border border-slate-200">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-lg text-white">KS</span>
+              </div>
+              <div className="flex-1">
+                <div className="font-medium text-sm">Mr.Kr.Senthil murugan</div>
+                <div className="text-xs text-slate-500">senthil.murugan@vcet.edu</div>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-200">
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 text-sm text-slate-600 hover:text-red-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
