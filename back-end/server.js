@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const { mongodb } = require('./config');
 const studentRoutes = require('./routes/studentRoutes');
 const facultyRoutes = require('./routes/facultyRoutes');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 
@@ -25,6 +26,7 @@ mongoose.connect(mongodb, {
 // Routes
 app.use('/api/students', studentRoutes);
 app.use('/api/faculty', facultyRoutes);
+app.use('/api/auth', authRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

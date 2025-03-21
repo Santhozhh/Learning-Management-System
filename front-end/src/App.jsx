@@ -2,25 +2,29 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import './App.css';  // Assuming your styles are in App.css
 import StudentDashboard from './StudentDashboard';
 import FacultyDashboard from './FacultyDashboard';
 import RegisterForm from './RegisterForm';
 import FacultyRegistrationForm from './FacultyRegistrationForm';
+import GoogleSignIn from './components/GoogleSignIn';
 
 const App = () => {
   return (
-    <Router>
-      <Routes>
-        {/* HomePage Route */}
-        <Route path="/" element={<HomePage />} />
-        {/* Student Dashboard Route */}
-        <Route path="/student-dashboard" element={<StudentDashboard />} />
-        <Route path="/faculty-dashboard" element={<FacultyDashboard />} />
-        <Route path="/register" element={<RegisterForm />} />
-        <Route path="/faculty-register" element={<FacultyRegistrationForm />} />
-      </Routes>
-    </Router>
+    <GoogleOAuthProvider clientId="745877836485-agg39ubvbkjn6mg6pq3and7cm46i9gkp.apps.googleusercontent.com">
+      <Router>
+        <Routes>
+          {/* HomePage Route */}
+          <Route path="/" element={<HomePage />} />
+          {/* Student Dashboard Route */}
+          <Route path="/student-dashboard" element={<StudentDashboard />} />
+          <Route path="/faculty-dashboard" element={<FacultyDashboard />} />
+          <Route path="/register" element={<RegisterForm />} />
+          <Route path="/faculty-register" element={<FacultyRegistrationForm />} />
+        </Routes>
+      </Router>
+    </GoogleOAuthProvider>
   );
 };
 
@@ -323,6 +327,17 @@ const HomePage = () => {
                   </div>
                 </>
               )}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className={`px-2 ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} text-gray-500`}>
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+              <GoogleSignIn isStudent={isStudent} />
               {error && (
                 <p className="text-red-500 text-sm text-center">{error}</p>
               )}
