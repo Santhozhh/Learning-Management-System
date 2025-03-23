@@ -54,38 +54,28 @@ const assignmentSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  class: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class',
+  dueDate: {
+    type: Date,
     required: true
+  },
+  totalPoints: {
+    type: Number,
+    default: 100
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  dueDate: {
-    type: Date,
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class',
     required: true
   },
-  points: {
-    type: Number,
-    required: true,
-    min: 0,
-    max: 100
-  },
-  // If there's an attachment with the assignment
-  attachmentDriveId: {
-    type: String
-  },
-  attachmentDriveLink: {
-    type: String
-  },
-  attachmentFileName: {
-    type: String
-  },
-  // List of submissions from students
-  submissions: [submissionSchema]
+  submissions: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Submission'
+  }]
 }, { timestamps: true });
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);

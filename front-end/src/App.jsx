@@ -6,6 +6,7 @@ import LoginForm from './components/LoginForm';
 import SetupProfile from './pages/SetupProfile';
 import StudentDashboard from './pages/StudentDashboard';
 import FacultyDashboard from './pages/FacultyDashboard';
+import ClassDetails from './pages/ClassDetails';
 import './App.css';
 
 // Get the Google Client ID from environment variables or use fallback
@@ -56,6 +57,12 @@ const App = () => {
           <Route 
             path="/faculty-dashboard" 
             element={<PrivateRoute element={<FacultyDashboard />} requiredRole={['faculty', 'hod']} />} 
+          />
+          
+          {/* Class Details - accessible to both students and faculty */}
+          <Route 
+            path="/class/:classId" 
+            element={<PrivateRoute element={<ClassDetails />} />} 
           />
           
           {/* Catch-all route */}

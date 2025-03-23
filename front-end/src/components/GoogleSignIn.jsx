@@ -33,6 +33,7 @@ const GoogleSignIn = ({ onError }) => {
         name: userInfo.name,
         picture: userInfo.picture,
         accessToken: response.access_token,
+        requestDriveAccess: true
       };
 
       console.log('Sending to backend:', userData);
@@ -89,6 +90,7 @@ const GoogleSignIn = ({ onError }) => {
   const googleLogin = useGoogleLogin({
     onSuccess,
     onError: onFailure,
+    scope: 'email profile https://www.googleapis.com/auth/drive.file',
     flow: 'implicit'
   });
 

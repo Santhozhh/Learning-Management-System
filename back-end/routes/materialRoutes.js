@@ -1,88 +1,95 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const auth = require('./middlewares/auth');
+const Material = require('../Schemas/Material');
 const Class = require('../Schemas/Class');
-const { auth, authorize } = require('./auth');
-const driveIntegration = require('../drive-integration');
+const googleDriveService = require('../services/googleDriveService');
 
 // Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/materials');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-
 const upload = multer({ 
-  storage,
-  limits: { fileSize: 25 * 1024 * 1024 } // 25MB limit
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// Upload a new material to a classroom (faculty only)
+// Middleware to authorize roles
+const authorize = (roles = []) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied: Insufficient permissions' });
+    }
+    next();
+  };
+};
+
+// Upload material to a class (faculty/hod only)
 router.post('/:classId', auth, authorize(['faculty', 'hod']), upload.single('file'), async (req, res) => {
   try {
     const { classId } = req.params;
     const { title, description } = req.body;
     
-    // Verify ownership of the class
-    const classroom = await Class.findOne({
-      _id: classId,
-      faculty: req.user._id
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+    
+    if (!title || !req.file) {
+      return res.status(400).json({ message: 'Title and file are required' });
+    }
+    
+    // Check if class exists and user is the creator
+    const classDoc = await Class.findById(classId);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    if (classDoc.creator.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this class' });
+    }
+    
+    // Upload file to Google Drive using the user's drive access
+    const folderName = `LMS-Class-${classDoc.name}-${classDoc._id}`;
+    const driveFile = await googleDriveService.uploadFile(
+      req.user._id,
+      req.file,
+      folderName
+    );
+    
+    // Create new material document
+    const newMaterial = new Material({
+      title,
+      description: description || '',
+      fileUrl: driveFile.viewLink,
+      fileId: driveFile.id,
+      fileName: driveFile.name,
+      mimeType: driveFile.mimeType,
+      size: driveFile.size,
+      uploadedBy: req.user._id,
+      class: classId
     });
     
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found or you do not have permission' });
-    }
+    await newMaterial.save();
     
-    // Initialize new material
-    const newMaterial = {
-      title,
-      description
-    };
-    
-    // Upload file to Google Drive if provided
-    if (req.file) {
-      // For MVP, just save the path of the uploaded file
-      newMaterial.fileUrl = req.file.path;
-      
-      /* 
-      // In a real implementation with Google Drive:
-      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      const token = JSON.parse(process.env.GOOGLE_TOKEN);
-      
-      const drive = await driveIntegration.setupDriveClient(credentials, token);
-      
-      // Upload file to Drive
-      const uploadedFile = await driveIntegration.uploadFile(
-        drive,
-        req.file.path,
-        title || req.file.originalname,
-        req.file.mimetype
-      );
-      
-      newMaterial.fileUrl = uploadedFile.webViewLink;
-      newMaterial.driveId = uploadedFile.id;
-      */
-    }
-    
-    // Add material to the class
-    classroom.materials.push(newMaterial);
-    await classroom.save();
+    // Add material reference to class
+    classDoc.materials.push(newMaterial._id);
+    await classDoc.save();
     
     res.status(201).json({
       message: 'Material uploaded successfully',
-      material: classroom.materials[classroom.materials.length - 1]
+      material: {
+        id: newMaterial._id,
+        title: newMaterial.title,
+        description: newMaterial.description,
+        fileUrl: newMaterial.fileUrl,
+        fileName: newMaterial.fileName,
+        uploadedBy: req.user.name,
+        createdAt: newMaterial.createdAt
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to upload material', error: error.message });
+    console.error('Error uploading material:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -91,135 +98,101 @@ router.get('/:classId', auth, async (req, res) => {
   try {
     const { classId } = req.params;
     
-    const classroom = await Class.findById(classId);
-    
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found' });
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
     }
     
-    // Check if user has access to this classroom
-    if (req.user.role === 'student') {
-      // Student can only access classes they're enrolled in or match their year/section
-      const isEnrolled = classroom.students.some(
-        student => student.toString() === req.user._id.toString()
-      );
-      
-      const matchesBatch = classroom.batches.some(
-        batch => batch.year === req.user.year && batch.section === req.user.section
-      );
-      
-      if (!isEnrolled && !matchesBatch) {
-        return res.status(403).json({ message: 'You do not have access to this classroom' });
-      }
-    } else if (req.user.role === 'faculty' && classroom.faculty.toString() !== req.user._id.toString()) {
-      // Faculty can only access their own classrooms
-      return res.status(403).json({ message: 'You do not have access to this classroom' });
+    // Check if class exists and user has access
+    const classDoc = await Class.findById(classId);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
     }
     
-    res.json({ materials: classroom.materials });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch materials', error: error.message });
-  }
-});
-
-// Download a material
-router.get('/:classId/:materialId/download', auth, async (req, res) => {
-  try {
-    const { classId, materialId } = req.params;
+    // Check if user is creator, student in the class, or matches year/section
+    const isCreator = classDoc.creator.toString() === req.user._id.toString();
+    const isStudent = classDoc.students.some(student => student.toString() === req.user._id.toString());
+    const isYearSectionMatch = req.user.role === 'student' && 
+                              req.user.year === classDoc.year && 
+                              req.user.section === classDoc.section;
     
-    const classroom = await Class.findById(classId);
-    
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found' });
+    if (!isCreator && !isStudent && !isYearSectionMatch && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not part of this class' });
     }
     
-    // Check if user has access to this classroom
-    if (req.user.role === 'student') {
-      // Student can only access classes they're enrolled in or match their year/section
-      const isEnrolled = classroom.students.some(
-        student => student.toString() === req.user._id.toString()
-      );
-      
-      const matchesBatch = classroom.batches.some(
-        batch => batch.year === req.user.year && batch.section === req.user.section
-      );
-      
-      if (!isEnrolled && !matchesBatch) {
-        return res.status(403).json({ message: 'You do not have access to this classroom' });
-      }
-    } else if (req.user.role === 'faculty' && classroom.faculty.toString() !== req.user._id.toString()) {
-      // Faculty can only access their own classrooms
-      return res.status(403).json({ message: 'You do not have access to this classroom' });
-    }
+    // Get materials for this class
+    const materials = await Material.find({ class: classId })
+      .sort({ createdAt: -1 })
+      .populate('uploadedBy', 'name email picture');
     
-    // Find the material
-    const material = classroom.materials.id(materialId);
-    
-    if (!material) {
-      return res.status(404).json({ message: 'Material not found' });
-    }
-    
-    // For real Google Drive implementation, redirect to the webViewLink
-    if (material.driveId) {
-      return res.redirect(material.fileUrl);
-    }
-    
-    // For MVP, serve the file from local storage
-    if (material.fileUrl) {
-      return res.download(material.fileUrl);
-    }
-    
-    res.status(404).json({ message: 'File not found' });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to download material', error: error.message });
-  }
-});
-
-// Delete a material (faculty only)
-router.delete('/:classId/:materialId', auth, authorize(['faculty', 'hod']), async (req, res) => {
-  try {
-    const { classId, materialId } = req.params;
-    
-    // Verify ownership of the class
-    const classroom = await Class.findOne({
-      _id: classId,
-      faculty: req.user._id
+    res.json({
+      materials: materials.map(material => ({
+        id: material._id,
+        title: material.title,
+        description: material.description,
+        fileUrl: material.fileUrl,
+        fileName: material.fileName,
+        mimeType: material.mimeType,
+        size: material.size,
+        uploadedBy: material.uploadedBy,
+        createdAt: material.createdAt
+      }))
     });
+  } catch (error) {
+    console.error('Error fetching materials:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Delete a material (creator or HoD only)
+router.delete('/:materialId', auth, authorize(['faculty', 'hod']), async (req, res) => {
+  try {
+    const { materialId } = req.params;
     
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found or you do not have permission' });
+    if (!mongoose.Types.ObjectId.isValid(materialId)) {
+      return res.status(400).json({ message: 'Invalid material ID' });
     }
     
-    // Find the material
-    const material = classroom.materials.id(materialId);
+    // Find material
+    const material = await Material.findById(materialId);
     
     if (!material) {
       return res.status(404).json({ message: 'Material not found' });
     }
     
-    // If there's a local file, delete it
-    if (material.fileUrl && !material.driveId && fs.existsSync(material.fileUrl)) {
-      fs.unlinkSync(material.fileUrl);
+    // Find associated class
+    const classDoc = await Class.findById(material.class);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Associated class not found' });
     }
     
-    /* 
-    // For real Google Drive implementation, delete the file from Drive
-    if (material.driveId) {
-      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      const token = JSON.parse(process.env.GOOGLE_TOKEN);
-      
-      const drive = await driveIntegration.setupDriveClient(credentials, token);
-      await drive.files.delete({ fileId: material.driveId });
+    // Check if user is creator of class or hod
+    if (classDoc.creator.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this class' });
     }
-    */
     
-    // Remove material from classroom
-    classroom.materials.pull(materialId);
-    await classroom.save();
+    try {
+      // Delete file from Google Drive using the user's drive access
+      await googleDriveService.deleteFile(req.user._id, material.fileId);
+    } catch (driveError) {
+      console.error('Error deleting file from Google Drive:', driveError);
+      // Continue with deletion of database entry even if Drive deletion fails
+    }
+    
+    // Remove material reference from class
+    classDoc.materials = classDoc.materials.filter(
+      id => id.toString() !== materialId
+    );
+    await classDoc.save();
+    
+    // Delete material document
+    await Material.findByIdAndDelete(materialId);
     
     res.json({ message: 'Material deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete material', error: error.message });
+    console.error('Error deleting material:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

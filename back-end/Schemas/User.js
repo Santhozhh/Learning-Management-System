@@ -45,6 +45,14 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     sparse: true
+  },
+  googleTokens: {
+    type: Object,
+    sparse: true
+  },
+  driveAccess: {
+    type: String,
+    sparse: true
   }
 }, {
   timestamps: true

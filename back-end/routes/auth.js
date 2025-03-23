@@ -79,7 +79,7 @@ router.post('/change-role', auth, authorize(['hod']), async (req, res) => {
 // Google OAuth login/signup for all users (students, faculty, HoD)
 router.post('/google', async (req, res) => {
   try {
-    const { email, name, picture, accessToken } = req.body;
+    const { email, name, picture, accessToken, requestDriveAccess } = req.body;
     
     // We don't need to verify the token here as we're receiving an access token, 
     // not an ID token. The client already verified with Google to get user info.
@@ -98,7 +98,8 @@ router.post('/google', async (req, res) => {
         email,
         googleId: email,
         picture,
-        role: 'student' // Default role for new users
+        role: 'student', // Default role for new users
+        driveAccess: requestDriveAccess ? accessToken : null
       });
       
       await user.save();
@@ -107,8 +108,14 @@ router.post('/google', async (req, res) => {
       // Update user picture if it's changed
       if (picture && user.picture !== picture) {
         user.picture = picture;
-        await user.save();
       }
+      
+      // Update drive access token if requested
+      if (requestDriveAccess && accessToken) {
+        user.driveAccess = accessToken;
+      }
+      
+      await user.save();
     }
     
     // Create JWT token
@@ -125,7 +132,8 @@ router.post('/google', async (req, res) => {
         picture: user.picture,
         department: user.department,
         year: user.year,
-        section: user.section
+        section: user.section,
+        hasDriveAccess: !!user.driveAccess
       }
     });
   } catch (error) {
@@ -194,7 +202,8 @@ router.get('/me', auth, async (req, res) => {
         picture: req.user.picture,
         department: req.user.department,
         year: req.user.year,
-        section: req.user.section
+        section: req.user.section,
+        hasDriveAccess: !!req.user.driveAccess
       }
     });
   } catch (error) {

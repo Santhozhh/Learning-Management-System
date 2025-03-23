@@ -10,21 +10,11 @@ const materialSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  class: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class',
-    required: true
-  },
-  uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  driveFileId: {
+  fileUrl: {
     type: String,
     required: true
   },
-  driveFileLink: {
+  fileId: {
     type: String,
     required: true
   },
@@ -32,12 +22,22 @@ const materialSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  fileType: {
+  mimeType: {
     type: String,
     required: true
   },
-  fileSize: {
+  size: {
     type: Number,
+    required: true
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  class: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class',
     required: true
   },
   viewCount: {

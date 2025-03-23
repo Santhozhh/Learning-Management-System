@@ -26,6 +26,25 @@ router.post('/', auth, authorize(['faculty', 'hod']), async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
     
+    // Generate a unique class code
+    const generateCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+    
+    let classCode = generateCode();
+    let codeExists = await Class.findOne({ classCode });
+    
+    // Ensure code uniqueness
+    while (codeExists) {
+      classCode = generateCode();
+      codeExists = await Class.findOne({ classCode });
+    }
+    
     const newClass = new Class({
       className,
       section,
@@ -33,6 +52,7 @@ router.post('/', auth, authorize(['faculty', 'hod']), async (req, res) => {
       subject,
       description: description || '',
       creator: req.user._id,
+      classCode
     });
     
     await newClass.save();

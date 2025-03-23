@@ -1,91 +1,102 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+const auth = require('./middlewares/auth');
+const Assignment = require('../Schemas/Assignment');
+const Submission = require('../Schemas/Submission');
 const Class = require('../Schemas/Class');
+const googleDriveService = require('../services/googleDriveService');
+const authService = require('../services/authService');
 const User = require('../Schemas/User');
-const { auth, authorize } = require('./auth');
-const driveIntegration = require('../drive-integration');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, '../uploads');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
     }
-    cb(null, uploadDir);
+    cb(null, uploadPath);
   },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+  filename: function (req, file, cb) {
+    // Create unique filename
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    cb(null, uniqueName);
   }
 });
 
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
-});
+const upload = multer({ storage: storage });
 
-// Create a new assignment (faculty only)
-router.post('/:classId', auth, authorize(['faculty', 'hod']), upload.single('template'), async (req, res) => {
+// Middleware to authorize roles
+const authorize = (roles = []) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied: Insufficient permissions' });
+    }
+    next();
+  };
+};
+
+// Create a new assignment (faculty/hod only)
+router.post('/:classId', auth, authorize(['faculty', 'hod']), async (req, res) => {
   try {
     const { classId } = req.params;
-    const { title, description, dueDate } = req.body;
+    const { title, description, dueDate, totalPoints } = req.body;
     
-    // Verify ownership of the class
-    const classroom = await Class.findOne({
-      _id: classId,
-      faculty: req.user._id
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+    
+    if (!title || !dueDate) {
+      return res.status(400).json({ message: 'Title and due date are required' });
+    }
+    
+    // Check if class exists and user is the creator
+    const classDoc = await Class.findById(classId);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    if (classDoc.creator.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this class' });
+    }
+    
+    // Create new assignment
+    const newAssignment = new Assignment({
+      title,
+      description: description || '',
+      dueDate,
+      totalPoints: totalPoints || 100,
+      createdBy: req.user._id,
+      class: classId
     });
     
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found or you do not have permission' });
-    }
+    await newAssignment.save();
     
-    // Initialize new assignment
-    const newAssignment = {
-      title,
-      description,
-      dueDate: new Date(dueDate)
-    };
-    
-    // Upload template file to Google Drive if provided
-    if (req.file) {
-      // For demo purposes, this would integrate with Google Drive
-      // In a real implementation, you would retrieve credentials and tokens
-      // from a secure storage or user session
-      
-      /* 
-      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      const token = JSON.parse(process.env.GOOGLE_TOKEN);
-      
-      const drive = await driveIntegration.setupDriveClient(credentials, token);
-      
-      const uploadedTemplate = await driveIntegration.uploadFile(
-        drive,
-        req.file.path,
-        `${title} - Template`,
-        req.file.mimetype
-      );
-      
-      newAssignment.driveTemplateId = uploadedTemplate.id;
-      */
-      
-      // For MVP, just save the path of the uploaded file
-      newAssignment.driveTemplateId = req.file.path;
-    }
-    
-    // Add assignment to the class
-    classroom.assignments.push(newAssignment);
-    await classroom.save();
+    // Add assignment reference to class
+    classDoc.assignments.push(newAssignment._id);
+    await classDoc.save();
     
     res.status(201).json({
       message: 'Assignment created successfully',
-      assignment: classroom.assignments[classroom.assignments.length - 1]
+      assignment: {
+        id: newAssignment._id,
+        title: newAssignment.title,
+        description: newAssignment.description,
+        dueDate: newAssignment.dueDate,
+        totalPoints: newAssignment.totalPoints,
+        createdBy: req.user.name,
+        createdAt: newAssignment.createdAt
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to create assignment', error: error.message });
+    console.error('Error creating assignment:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -94,164 +105,304 @@ router.get('/:classId', auth, async (req, res) => {
   try {
     const { classId } = req.params;
     
-    const classroom = await Class.findById(classId);
-    
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found' });
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
     }
     
-    // Check if user has access to this classroom
+    // Check if class exists and user has access
+    const classDoc = await Class.findById(classId);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    // Check if user is creator, student in the class, or matches year/section
+    const isCreator = classDoc.creator.toString() === req.user._id.toString();
+    const isStudent = classDoc.students.some(student => student.toString() === req.user._id.toString());
+    const isYearSectionMatch = req.user.role === 'student' && 
+                              req.user.year === classDoc.year && 
+                              req.user.section === classDoc.section;
+    
+    if (!isCreator && !isStudent && !isYearSectionMatch && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not part of this class' });
+    }
+    
+    // Get assignments for this class
+    const assignments = await Assignment.find({ class: classId })
+      .sort({ dueDate: 1 })
+      .populate('createdBy', 'name email picture');
+    
+    // For students, fetch their submissions as well
     if (req.user.role === 'student') {
-      // Student can only access classes they're enrolled in or match their year/section
-      const isEnrolled = classroom.students.some(
-        student => student.toString() === req.user._id.toString()
-      );
+      const enrichedAssignments = await Promise.all(assignments.map(async (assignment) => {
+        const submission = await Submission.findOne({
+          assignment: assignment._id,
+          student: req.user._id
+        });
+        
+        return {
+          id: assignment._id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          totalPoints: assignment.totalPoints,
+          createdBy: assignment.createdBy,
+          createdAt: assignment.createdAt,
+          submission: submission ? {
+            id: submission._id,
+            submittedAt: submission.createdAt,
+            grade: submission.grade,
+            feedback: submission.feedback,
+            fileUrl: submission.fileUrl,
+            fileName: submission.fileName
+          } : null
+        };
+      }));
       
-      const matchesBatch = classroom.batches.some(
-        batch => batch.year === req.user.year && batch.section === req.user.section
-      );
-      
-      if (!isEnrolled && !matchesBatch) {
-        return res.status(403).json({ message: 'You do not have access to this classroom' });
-      }
-    } else if (req.user.role === 'faculty' && classroom.faculty.toString() !== req.user._id.toString()) {
-      // Faculty can only access their own classrooms
-      return res.status(403).json({ message: 'You do not have access to this classroom' });
+      return res.json({ assignments: enrichedAssignments });
     }
     
-    res.json({ assignments: classroom.assignments });
+    // For faculty, just return the assignments
+    res.json({
+      assignments: assignments.map(assignment => ({
+        id: assignment._id,
+        title: assignment.title,
+        description: assignment.description,
+        dueDate: assignment.dueDate,
+        totalPoints: assignment.totalPoints,
+        createdBy: assignment.createdBy,
+        createdAt: assignment.createdAt,
+        submissionCount: assignment.submissions.length
+      }))
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch assignments', error: error.message });
+    console.error('Error fetching assignments:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Submit assignment (student only)
-router.post('/:classId/:assignmentId/submit', auth, authorize(['student']), upload.single('submission'), async (req, res) => {
+// Submit an assignment (student only)
+router.post('/submit/:assignmentId', auth, authorize(['student']), upload.single('file'), async (req, res) => {
   try {
-    const { classId, assignmentId } = req.params;
+    const { assignmentId } = req.params;
+    const { notes } = req.body;
     
-    const classroom = await Class.findById(classId);
-    
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found' });
+    if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+      // Delete temporary file
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(400).json({ message: 'Invalid assignment ID' });
     }
     
-    // Find the assignment
-    const assignment = classroom.assignments.id(assignmentId);
+    if (!req.file) {
+      return res.status(400).json({ message: 'File is required' });
+    }
+    
+    // Find assignment
+    const assignment = await Assignment.findById(assignmentId).populate('class');
     
     if (!assignment) {
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: 'Assignment not found' });
     }
     
-    // Check if assignment is already submitted by this student
-    const existingSubmission = assignment.submissions?.find(
-      submission => submission.student.toString() === req.user._id.toString()
-    );
+    // Check due date
+    if (new Date(assignment.dueDate) < new Date()) {
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Assignment is past due date' });
+    }
+    
+    // Check if student is in the class
+    const classDoc = await Class.findById(assignment.class._id);
+    const isStudent = classDoc.students.some(student => student.toString() === req.user._id.toString());
+    const isYearSectionMatch = req.user.year === classDoc.year && req.user.section === classDoc.section;
+    
+    if (!isStudent && !isYearSectionMatch) {
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({ message: 'Access denied: You are not part of this class' });
+    }
+    
+    // Check if student already submitted this assignment
+    const existingSubmission = await Submission.findOne({
+      assignment: assignmentId,
+      student: req.user._id
+    });
     
     if (existingSubmission) {
+      // Delete temporary file
+      fs.unlinkSync(req.file.path);
       return res.status(400).json({ message: 'You have already submitted this assignment' });
     }
     
-    // Ensure the submissions array exists
-    if (!assignment.submissions) {
-      assignment.submissions = [];
-    }
+    // Get OAuth2 client for the user
+    const oauthClient = await authService.getOAuth2Client(req.user._id);
     
-    // Add submission with file information
-    const submission = {
-      student: req.user._id,
-      submittedAt: new Date()
+    // Upload file to Google Drive
+    const fileData = {
+      name: `Assignment-${assignment.title}-${req.user.name}`,
+      mimeType: req.file.mimetype,
+      filepath: req.file.path
     };
     
-    if (req.file) {
-      // For MVP, just save the path of the uploaded file
-      submission.driveFileId = req.file.path;
-      
-      /* 
-      // In a real implementation with Google Drive:
-      const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      const token = JSON.parse(process.env.GOOGLE_TOKEN);
-      
-      const drive = await driveIntegration.setupDriveClient(credentials, token);
-      
-      // Get faculty email
-      const faculty = await User.findById(classroom.faculty);
-      
-      // Upload submission to Drive
-      const uploadedFile = await driveIntegration.uploadFile(
-        drive,
-        req.file.path,
-        `${assignment.title} - ${req.user.name} Submission`,
-        req.file.mimetype
+    const driveFile = await googleDriveService.uploadFile(
+      oauthClient, 
+      fileData, 
+      req.user._id,
+      false // isStaffUpload = false (student upload)
+    );
+    
+    // Find the teacher's email to give them edit access
+    const teacher = await User.findById(assignment.createdBy);
+    
+    if (teacher && teacher.email) {
+      await googleDriveService.setFilePermissions(
+        oauthClient,
+        driveFile.id,
+        'writer',
+        'user',
+        teacher.email
       );
-      
-      // Share with faculty
-      await driveIntegration.shareFileWithUser(
-        drive,
-        uploadedFile.id,
-        faculty.email,
-        'writer'
-      );
-      
-      submission.driveFileId = uploadedFile.id;
-      */
     }
     
-    assignment.submissions.push(submission);
-    await classroom.save();
+    // Create submission
+    const newSubmission = new Submission({
+      assignment: assignmentId,
+      student: req.user._id,
+      fileUrl: driveFile.webViewLink,
+      fileId: driveFile.id,
+      fileName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      notes: notes || ''
+    });
     
-    res.json({
+    await newSubmission.save();
+    
+    // Add submission reference to assignment
+    assignment.submissions.push(newSubmission._id);
+    await assignment.save();
+    
+    // Delete temporary file after upload
+    fs.unlinkSync(req.file.path);
+    
+    res.status(201).json({
       message: 'Assignment submitted successfully',
-      submission
+      submission: {
+        id: newSubmission._id,
+        fileUrl: newSubmission.fileUrl,
+        fileName: newSubmission.fileName,
+        submittedAt: newSubmission.createdAt
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to submit assignment', error: error.message });
+    console.error('Error submitting assignment:', error);
+    
+    // Delete temporary file if it exists
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Grade assignment submission (faculty only)
-router.post('/:classId/:assignmentId/grade/:submissionId', auth, authorize(['faculty', 'hod']), async (req, res) => {
+// Get all submissions for an assignment (faculty only)
+router.get('/submissions/:assignmentId', auth, authorize(['faculty', 'hod']), async (req, res) => {
   try {
-    const { classId, assignmentId, submissionId } = req.params;
-    const { grade, feedback } = req.body;
+    const { assignmentId } = req.params;
     
-    // Verify ownership of the class
-    const classroom = await Class.findOne({
-      _id: classId,
-      faculty: req.user._id
-    });
-    
-    if (!classroom) {
-      return res.status(404).json({ message: 'Classroom not found or you do not have permission' });
+    if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+      return res.status(400).json({ message: 'Invalid assignment ID' });
     }
     
-    // Find the assignment
-    const assignment = classroom.assignments.id(assignmentId);
+    // Find assignment
+    const assignment = await Assignment.findById(assignmentId);
     
     if (!assignment) {
       return res.status(404).json({ message: 'Assignment not found' });
     }
     
-    // Find the submission
-    const submission = assignment.submissions.id(submissionId);
+    // Check if user is the creator
+    if (assignment.createdBy.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this assignment' });
+    }
+    
+    // Get all submissions
+    const submissions = await Submission.find({ assignment: assignmentId })
+      .populate('student', 'name email picture year section');
+    
+    res.json({
+      submissions: submissions.map(submission => ({
+        id: submission._id,
+        student: submission.student,
+        fileUrl: submission.fileUrl,
+        fileName: submission.fileName,
+        submittedAt: submission.createdAt,
+        grade: submission.grade,
+        feedback: submission.feedback,
+        notes: submission.notes
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Grade a submission (faculty only)
+router.post('/grade/:submissionId', auth, authorize(['faculty', 'hod']), async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { grade, feedback } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
+      return res.status(400).json({ message: 'Invalid submission ID' });
+    }
+    
+    if (!grade || isNaN(grade)) {
+      return res.status(400).json({ message: 'Valid grade is required' });
+    }
+    
+    // Find submission
+    const submission = await Submission.findById(submissionId)
+      .populate({
+        path: 'assignment',
+        populate: { path: 'createdBy' }
+      });
     
     if (!submission) {
       return res.status(404).json({ message: 'Submission not found' });
     }
     
-    // Update grade and feedback
-    submission.grade = grade;
-    submission.feedback = feedback;
-    submission.status = 'graded';
+    // Check if user is the creator of the assignment
+    if (submission.assignment.createdBy._id.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this assignment' });
+    }
     
-    await classroom.save();
+    // Update submission
+    submission.grade = grade;
+    submission.feedback = feedback || '';
+    submission.gradedAt = Date.now();
+    submission.gradedBy = req.user._id;
+    
+    await submission.save();
     
     res.json({
       message: 'Submission graded successfully',
-      submission
+      submission: {
+        id: submission._id,
+        grade: submission.grade,
+        feedback: submission.feedback,
+        gradedAt: submission.gradedAt
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to grade submission', error: error.message });
+    console.error('Error grading submission:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
