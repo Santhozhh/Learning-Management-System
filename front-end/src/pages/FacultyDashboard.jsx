@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { classAPI, authAPI } from '../utils/api';
 import ClassCard from '../components/ClassCard';
+import { FiX, FiMail, FiPhone, FiBookOpen, FiCalendar } from 'react-icons/fi';
 
 // Helper function to process Google profile URLs
 const getProfileImageUrl = (url) => {
@@ -11,6 +12,25 @@ const getProfileImageUrl = (url) => {
     return `/googleusercontent${url.split('googleusercontent.com')[1]}`;
   }
   return url;
+};
+
+// Add mock notifications (replace with actual API calls later)
+const mockNotifications = {
+  faculty: [
+    { id: 1, type: 'assignment', title: 'New Assignment Submissions', message: '5 new students submitted their assignments', time: '2 mins ago', read: false },
+    { id: 2, type: 'class', title: 'Class Schedule Updated', message: 'Your next class is scheduled for tomorrow', time: '1 hour ago', read: false },
+    { id: 3, type: 'announcement', title: 'Department Meeting', message: 'Monthly department meeting at 3 PM', time: '2 hours ago', read: true }
+  ],
+  hod: [
+    { id: 1, type: 'faculty', title: 'New Faculty Joined', message: 'Dr. Sarah Johnson joined the department', time: '5 mins ago', read: false },
+    { id: 2, type: 'department', title: 'Department Performance', message: 'Monthly statistics report is ready', time: '30 mins ago', read: false },
+    { id: 3, type: 'request', title: 'Role Change Request', message: 'New role change request pending approval', time: '1 hour ago', read: true }
+  ],
+  student: [
+    { id: 1, type: 'assignment', title: 'Assignment Due', message: 'Database Management System assignment due tomorrow', time: '10 mins ago', read: false },
+    { id: 2, type: 'grade', title: 'New Grade Posted', message: 'Your Web Development grade has been posted', time: '2 hours ago', read: false },
+    { id: 3, type: 'class', title: 'Class Cancelled', message: 'Tomorrow\'s morning class has been cancelled', time: '3 hours ago', read: true }
+  ]
 };
 
 const FacultyDashboard = () => {
@@ -33,6 +53,13 @@ const FacultyDashboard = () => {
   const [userRoleData, setUserRoleData] = useState({ userId: '', role: '' });
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [departmentStats, setDepartmentStats] = useState(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFacultyModal, setShowFacultyModal] = useState(false);
+  const [facultyList, setFacultyList] = useState([]);
+  const [loadingFaculty, setLoadingFaculty] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,6 +73,20 @@ const FacultyDashboard = () => {
     // Fetch faculty's classes
     fetchClasses();
   }, [navigate]);
+
+  useEffect(() => {
+    // Set notifications based on user role
+    if (user?.role === 'hod') {
+      setNotifications(mockNotifications.hod);
+      setUnreadCount(mockNotifications.hod.filter(n => !n.read).length);
+    } else if (user?.role === 'faculty') {
+      setNotifications(mockNotifications.faculty);
+      setUnreadCount(mockNotifications.faculty.filter(n => !n.read).length);
+    } else {
+      setNotifications(mockNotifications.student);
+      setUnreadCount(mockNotifications.student.filter(n => !n.read).length);
+    }
+  }, [user]);
 
   const fetchClasses = async () => {
     try {
@@ -205,18 +246,172 @@ const FacultyDashboard = () => {
     setUserRoleData(prev => ({ ...prev, [name]: value }));
   };
 
+  const markAsRead = (notificationId) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === notificationId 
+          ? { ...notification, read: true }
+          : notification
+      )
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, read: true }))
+    );
+    setUnreadCount(0);
+  };
+
+  // Add this inside the header section, right before the profile section
+  const notificationButton = (
+    <div className="relative">
+      <button
+        onClick={() => setShowNotifications(!showNotifications)}
+        className="relative p-2 text-gray-600 hover:text-gray-900 focus:outline-none"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {showNotifications && (
+        <div className="absolute right-0 mt-3 w-80 sm:w-96 z-50">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-100">
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  Notifications
+                </h3>
+                <button
+                  onClick={markAllAsRead}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Mark all as read
+                </button>
+              </div>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {notifications.map(notification => (
+                <div
+                  key={notification.id}
+                  className={`p-4 border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${
+                    !notification.read ? 'bg-blue-50/30' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-1 p-2 rounded-xl ${
+                      notification.type === 'assignment' ? 'bg-purple-100 text-purple-600' :
+                      notification.type === 'class' ? 'bg-blue-100 text-blue-600' :
+                      notification.type === 'announcement' ? 'bg-amber-100 text-amber-600' :
+                      notification.type === 'faculty' ? 'bg-green-100 text-green-600' :
+                      notification.type === 'grade' ? 'bg-indigo-100 text-indigo-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {notification.type === 'assignment' && (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      )}
+                      {notification.type === 'class' && (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                      {notification.type === 'announcement' && (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                        </svg>
+                      )}
+                      {notification.type === 'faculty' && (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      )}
+                      {notification.type === 'grade' && (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-sm font-medium text-gray-900">{notification.title}</h4>
+                        <span className="text-xs text-gray-500">{notification.time}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                    </div>
+                  </div>
+                  {!notification.read && (
+                    <button
+                      onClick={() => markAsRead(notification.id)}
+                      className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {notifications.length === 0 && (
+              <div className="p-4 text-center text-gray-500">
+                No notifications
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const filteredClasses = classes.filter(classItem => 
+    classItem.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    classItem.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    `Year ${classItem.year}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    `Section ${classItem.section}`.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Add this function to fetch faculty list
+  const fetchFacultyList = async () => {
+    try {
+      setLoadingFaculty(true);
+      // Replace this with your actual API call
+      const response = await fetch('/api/faculty/list');
+      const data = await response.json();
+      setFacultyList(data.faculty || []);
+    } catch (error) {
+      console.error('Error fetching faculty list:', error);
+    } finally {
+      setLoadingFaculty(false);
+    }
+  };
+
+  // Add this useEffect to fetch faculty when modal opens
+  useEffect(() => {
+    if (showFacultyModal) {
+      fetchFacultyList();
+    }
+  }, [showFacultyModal]);
+
   if (!user) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">
             {isHoD ? 'Head of Department Dashboard' : 'Faculty Dashboard'}
           </h1>
           <div className="flex items-center space-x-4">
+            {notificationButton}
             <div className="flex items-center space-x-2">
               {user.picture && !showDefaultAvatar ? (
                 <img 
@@ -249,61 +444,340 @@ const FacultyDashboard = () => {
       
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* User Information Card */}
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Your Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">Email</p>
-                <p className="font-medium">{user.email}</p>
+          {/* Faculty Information Card */}
+          {!isHoD && (
+            <div className="bg-gradient-to-br from-white to-purple-50 shadow-lg rounded-2xl p-8 mb-6 border border-purple-100">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  Faculty Information
+                </h2>
+                <div className="flex items-center gap-3 bg-white/50 backdrop-blur-sm px-4 py-2 rounded-xl border border-purple-100">
+                  <div className={`w-3 h-3 rounded-full bg-green-500 animate-pulse`} />
+                  <span className="text-sm font-medium text-purple-700">Active Status</span>
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Profile and Name */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100 flex items-center gap-4">
+                  {user.picture && !showDefaultAvatar ? (
+                    <img 
+                      src={getProfileImageUrl(user.picture)} 
+                      alt="Profile" 
+                      className="h-16 w-16 rounded-xl object-cover ring-2 ring-purple-200"
+                      onError={handleImageError}
+                    />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center ring-2 ring-purple-200">
+                      <span className="text-2xl font-bold text-white">
+                        {user.name?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    </div>
+                  )}
               <div>
-                <p className="text-sm text-gray-500">Department</p>
-                <p className="font-medium">{user.department || 'Not assigned'}</p>
+                    <h3 className="font-semibold text-gray-900">{user.name}</h3>
+                    <p className="text-sm text-purple-600 font-medium">Faculty Member</p>
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">Email Address</span>
+                  </div>
+                  <p className="text-gray-900 font-medium pl-11">{user.email}</p>
+                </div>
+
+                {/* Department */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">Department</span>
+                  </div>
+                  <p className="text-gray-900 font-medium pl-11">{user.department || 'CSE'}</p>
+                </div>
+
+                {/* Year */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">Year</span>
+                  </div>
+                  <p className="text-gray-900 font-medium pl-11">{user.year || 'Not assigned'}</p>
+                </div>
+
+                {/* Section */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">Section</span>
+                  </div>
+                  <p className="text-gray-900 font-medium pl-11">{user.section || 'Not assigned'}</p>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-white/90">Active Classes</span>
+                    </div>
+                    <p className="text-2xl font-bold pl-11">{classes.length}</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-white/90">Total Students</span>
+                    </div>
+                    <p className="text-2xl font-bold pl-11">
+                      {classes.reduce((total, cls) => total + (cls.students?.length || 0), 0)}
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-white/90">Active Today</span>
+                    </div>
+                    <p className="text-2xl font-bold pl-11">Yes</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-white/90">Last Active</span>
+                    </div>
+                    <p className="text-sm font-bold pl-11">Just Now</p>
+                  </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Role</p>
-                <p className="font-medium">{user.role === 'hod' ? 'Head of Department' : 'Faculty'}</p>
               </div>
             </div>
-          </div>
+          )}
 
           {isHoD && (
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Management Controls</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-lg transition-colors"
-                  onClick={() => {
-                    fetchAllUsers();
-                    setShowRoleManagementModal(true);
-                  }}
-                >
+            <div className="space-y-6 mb-6">
+              {/* HOD Welcome Banner */}
+              <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2">Welcome, Head of Department</h2>
+                    <p className="text-indigo-100">Manage your department and faculty members</p>
+                  </div>
+                  <div className="h-16 w-16 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Management Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Faculty Management Card */}
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-purple-100 hover:shadow-xl transition-shadow duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Faculty Management</h3>
+                        <p className="text-sm text-gray-500">Manage roles and permissions</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
+                      Manage
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    <button 
+                      onClick={() => {
+                        fetchAllUsers();
+                        setShowRoleManagementModal(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                      </svg>
                   Manage Faculty Roles
                 </button>
-                <button 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-lg transition-colors"
-                  onClick={() => {
-                    calculateDepartmentStats();
-                    setShowDepartmentModal(true);
-                  }}
-                >
-                  Department Overview
+                  </div>
+                </div>
+
+                {/* Department Overview Card */}
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-blue-100 hover:shadow-xl transition-shadow duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Department Analytics</h3>
+                        <p className="text-sm text-gray-500">View department statistics</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
+                      View
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    <button 
+                      onClick={() => {
+                        calculateDepartmentStats();
+                        setShowDepartmentModal(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                      </svg>
+                      View Department Overview
                 </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Stats Section */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-6 text-white">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-purple-100">Total Faculty</p>
+                      <h4 className="text-2xl font-bold">{allUsers.filter(u => u.role === 'faculty').length}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl p-6 text-white">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-pink-100">Total Classes</p>
+                      <h4 className="text-2xl font-bold">{classes.length}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 text-white">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-100">Total Students</p>
+                      <h4 className="text-2xl font-bold">
+                        {classes.reduce((total, cls) => total + (cls.students?.length || 0), 0)}
+                      </h4>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-emerald-100">Active Today</p>
+                      <h4 className="text-2xl font-bold">Yes</h4>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
           
           {/* Classes Section */}
           <div className="bg-white shadow rounded-lg p-6">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <h2 className="text-xl font-semibold">Your Classes</h2>
+              <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none sm:min-w-[300px]">
+                  <input
+                    type="text"
+                    placeholder="Search classes..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/20"
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               <button
                 onClick={() => setShowCreateForm(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors"
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2.5 rounded-xl transition-all duration-300 shadow-lg hover:shadow-purple-500/25 flex items-center gap-2 whitespace-nowrap"
               >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                  </svg>
                 Create New Class
               </button>
+              </div>
             </div>
             
             {error && (
@@ -314,13 +788,14 @@ const FacultyDashboard = () => {
             
             {/* Create Class Form (Modal) */}
             {showCreateForm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">Create New Class</h3>
+              <div className="fixed inset-0 flex items-center justify-center z-50">
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
+                <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-8 w-full max-w-md border border-white/20">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-semibold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">Create New Class</h3>
                     <button 
                       onClick={() => setShowCreateForm(false)}
-                      className="text-gray-500 hover:text-gray-700"
+                      className="text-gray-500 hover:text-gray-700 transition-colors"
                     >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -329,7 +804,7 @@ const FacultyDashboard = () => {
                   </div>
                   
                   <form onSubmit={handleCreateClass}>
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Class Name *
@@ -339,7 +814,7 @@ const FacultyDashboard = () => {
                           name="className"
                           value={createFormData.className}
                           onChange={handleCreateFormChange}
-                          className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full bg-white/50 backdrop-blur-sm border border-emerald-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/20"
                           required
                         />
                       </div>
@@ -353,7 +828,7 @@ const FacultyDashboard = () => {
                           name="subject"
                           value={createFormData.subject}
                           onChange={handleCreateFormChange}
-                          className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full bg-white/50 backdrop-blur-sm border border-emerald-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/20"
                           required
                         />
                       </div>
@@ -367,7 +842,7 @@ const FacultyDashboard = () => {
                             name="year"
                             value={createFormData.year}
                             onChange={handleCreateFormChange}
-                            className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full bg-white/50 backdrop-blur-sm border border-emerald-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/20"
                             required
                           >
                             <option value="">Select Year</option>
@@ -386,7 +861,7 @@ const FacultyDashboard = () => {
                             name="section"
                             value={createFormData.section}
                             onChange={handleCreateFormChange}
-                            className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full bg-white/50 backdrop-blur-sm border border-emerald-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/20"
                             required
                           >
                             <option value="">Select Section</option>
@@ -406,25 +881,28 @@ const FacultyDashboard = () => {
                           name="description"
                           value={createFormData.description}
                           onChange={handleCreateFormChange}
-                          className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full bg-white/50 backdrop-blur-sm border border-emerald-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500/20"
                           rows="3"
                         ></textarea>
                       </div>
                     </div>
                     
-                    <div className="mt-6 flex justify-end space-x-3">
+                    <div className="mt-8 flex justify-end space-x-3">
                       <button
                         type="button"
                         onClick={() => setShowCreateForm(false)}
-                        className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors"
+                        className="px-6 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50/50 transition-all duration-300"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={loading}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors"
+                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg transition-all duration-300 hover:shadow-green-500/25 flex items-center gap-2"
                       >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
                         {loading ? 'Creating...' : 'Create Class'}
                       </button>
                     </div>
@@ -437,17 +915,22 @@ const FacultyDashboard = () => {
               <div className="flex justify-center py-10">
                 <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : classes.length > 0 ? (
+            ) : filteredClasses.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {classes.map(classItem => (
+                {filteredClasses.map(classItem => (
                   <ClassCard 
                     key={classItem.id || classItem._id} 
                     classData={{
                       ...classItem,
-                      id: classItem.id || classItem._id // Ensure id is available
+                      id: classItem.id || classItem._id
                     }} 
                   />
                 ))}
+              </div>
+            ) : classes.length > 0 ? (
+              <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg">
+                <p className="text-gray-500">No classes found matching your search</p>
+                <p className="text-gray-400 text-sm mt-1">Try adjusting your search terms</p>
               </div>
             ) : (
               <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg">
@@ -461,13 +944,14 @@ const FacultyDashboard = () => {
 
       {/* Role Management Modal */}
       {showRoleManagementModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Manage Faculty Roles</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
+          <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto border border-white/20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Manage Faculty Roles</h3>
               <button 
                 onClick={() => setShowRoleManagementModal(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -477,7 +961,7 @@ const FacultyDashboard = () => {
             
             {loadingUsers ? (
               <div className="flex justify-center py-6">
-                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : (
               <>
@@ -491,7 +975,7 @@ const FacultyDashboard = () => {
                         name="userId"
                         value={userRoleData.userId}
                         onChange={handleUserRoleFormChange}
-                        className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full bg-white/50 backdrop-blur-sm border border-purple-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/20"
                         required
                       >
                         <option value="">Select a user</option>
@@ -511,7 +995,7 @@ const FacultyDashboard = () => {
                         name="role"
                         value={userRoleData.role}
                         onChange={handleUserRoleFormChange}
-                        className="w-full border border-gray-300 rounded-md shadow-sm px-4 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full bg-white/50 backdrop-blur-sm border border-purple-100 rounded-xl shadow-sm px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/20"
                         required
                       >
                         <option value="">Select role</option>
@@ -526,48 +1010,48 @@ const FacultyDashboard = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors"
+                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg transition-all duration-300 hover:shadow-purple-500/25"
                     >
                       {loading ? 'Updating...' : 'Update Role'}
                     </button>
                   </div>
                 </form>
                 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                <div className="overflow-x-auto rounded-xl bg-white/50 backdrop-blur-sm border border-purple-100">
+                  <table className="min-w-full divide-y divide-purple-100">
+                    <thead className="bg-purple-50/50">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">
                           User
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">
                           Email
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">
                           Current Role
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="divide-y divide-purple-100">
                       {allUsers.map(user => (
-                        <tr key={user.id || user._id}>
+                        <tr key={user.id || user._id} className="hover:bg-purple-50/30 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               {user.picture ? (
                                 <img 
                                   src={getProfileImageUrl(user.picture)} 
                                   alt={user.name}
-                                  className="h-8 w-8 rounded-full object-cover mr-3"
+                                  className="h-8 w-8 rounded-full object-cover mr-3 ring-2 ring-purple-100"
                                   onError={(e) => {
                                     e.target.onerror = null;
                                     e.target.src = '';
-                                    e.target.parentElement.innerHTML = `<div class="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white mr-3">
+                                    e.target.parentElement.innerHTML = `<div class="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white mr-3">
                                       ${user.name.charAt(0).toUpperCase()}
                                     </div>`;
                                   }}
                                 />
                               ) : (
-                                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white mr-3">
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white mr-3">
                                   {user.name.charAt(0).toUpperCase()}
                                 </div>
                               )}
@@ -576,16 +1060,16 @@ const FacultyDashboard = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             {user.email}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               user.role === 'hod' 
-                                ? 'bg-purple-100 text-purple-800' 
+                                ? 'bg-purple-100/70 text-purple-800' 
                                 : user.role === 'faculty'
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-blue-100 text-blue-800'
+                                  ? 'bg-green-100/70 text-green-800'
+                                  : 'bg-blue-100/70 text-blue-800'
                             }`}>
                               {user.role === 'hod' 
                                 ? 'Head of Department' 
@@ -607,13 +1091,14 @@ const FacultyDashboard = () => {
       
       {/* Department Overview Modal */}
       {showDepartmentModal && departmentStats && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Department Overview</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
+          <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-8 w-full max-w-xl border border-white/20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Department Overview</h3>
               <button 
                 onClick={() => setShowDepartmentModal(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -621,43 +1106,141 @@ const FacultyDashboard = () => {
               </button>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-indigo-50 rounded-lg p-4">
-                <p className="text-sm text-indigo-700">Total Classes</p>
-                <p className="text-3xl font-bold text-indigo-900">{departmentStats.totalClasses}</p>
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 backdrop-blur-sm rounded-xl p-6 border border-indigo-100/20">
+                <p className="text-sm text-indigo-700 font-medium mb-1">Total Classes</p>
+                <p className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{departmentStats.totalClasses}</p>
               </div>
               
-              <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-sm text-green-700">Total Students</p>
-                <p className="text-3xl font-bold text-green-900">{departmentStats.totalStudents}</p>
+              <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm rounded-xl p-6 border border-blue-100/20">
+                <p className="text-sm text-blue-700 font-medium mb-1">Total Students</p>
+                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">{departmentStats.totalStudents}</p>
               </div>
             </div>
             
-            <h4 className="font-medium text-gray-900 mb-3">Classes by Year</h4>
-            <div className="space-y-3 mb-6">
+            <h4 className="font-medium text-gray-900 mb-4">Classes by Year</h4>
+            <div className="space-y-4 mb-8 bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-blue-100/20">
               {Object.entries(departmentStats.classesByYear).map(([year, count]) => (
                 <div key={year} className="flex items-center">
                   <div className="w-1/3">
-                    <span className="text-sm font-medium">Year {year}</span>
+                    <span className="text-sm font-medium text-gray-700">Year {year}</span>
                   </div>
                   <div className="w-2/3 flex items-center gap-3">
-                    <div className="h-2 bg-indigo-200 rounded-full flex-grow">
+                    <div className="h-2.5 bg-blue-100/50 rounded-full flex-grow">
                       <div 
-                        className="h-2 bg-indigo-600 rounded-full" 
+                        className="h-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full transition-all duration-500" 
                         style={{ width: `${(count / departmentStats.totalClasses) * 100}%` }}
                       ></div>
                     </div>
-                    <span className="text-sm text-gray-600 w-8 text-right">{count}</span>
+                    <span className="text-sm font-medium text-gray-600 w-8 text-right">{count}</span>
                   </div>
                 </div>
               ))}
             </div>
             
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Average Students per Class</p>
-              <p className="text-2xl font-semibold text-gray-900">
+            <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 backdrop-blur-sm rounded-xl p-6 border border-emerald-100/20">
+              <p className="text-sm text-emerald-700 font-medium mb-1">Average Students per Class</p>
+              <p className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                 {departmentStats.studentsPerClass.toFixed(1)}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add the Faculty List Modal */}
+      {showFacultyModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white/90 backdrop-blur-xl w-full max-w-4xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                Faculty Members
+              </h2>
+              <button
+                onClick={() => setShowFacultyModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+              {loadingFaculty ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : facultyList.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {facultyList.map((faculty) => (
+                    <div
+                      key={faculty._id}
+                      className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
+                    >
+                      <div className="flex items-start space-x-4">
+                        <div className="relative">
+                          {faculty.picture ? (
+                            <img
+                              src={faculty.picture}
+                              alt={faculty.name}
+                              className="w-16 h-16 rounded-xl object-cover ring-4 ring-purple-100"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center ring-4 ring-purple-100">
+                              <span className="text-2xl font-bold text-white">
+                                {faculty.name?.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                        </div>
+                        
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                            {faculty.name}
+                          </h3>
+                          <div className="space-y-2">
+                            <div className="flex items-center text-sm text-gray-600">
+                              <FiMail className="w-4 h-4 mr-2 text-purple-500" />
+                              {faculty.email}
+                            </div>
+                            <div className="flex items-center text-sm text-gray-600">
+                              <FiBookOpen className="w-4 h-4 mr-2 text-blue-500" />
+                              {faculty.department || 'Department not set'}
+                            </div>
+                            <div className="flex items-center text-sm text-gray-600">
+                              <FiCalendar className="w-4 h-4 mr-2 text-green-500" />
+                              {`Joined ${new Date(faculty.joinedDate).toLocaleDateString()}`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                          <div className="bg-purple-50 rounded-lg p-2">
+                            <p className="text-sm text-purple-600 font-medium">Classes</p>
+                            <p className="text-lg font-semibold text-gray-900">{faculty.totalClasses || 0}</p>
+                          </div>
+                          <div className="bg-blue-50 rounded-lg p-2">
+                            <p className="text-sm text-blue-600 font-medium">Students</p>
+                            <p className="text-lg font-semibold text-gray-900">{faculty.totalStudents || 0}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiUsers className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-gray-500 font-medium">No faculty members found</h3>
+                  <p className="text-gray-400 text-sm mt-1">Try refreshing the page</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

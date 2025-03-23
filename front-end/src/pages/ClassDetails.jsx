@@ -165,8 +165,81 @@ const ClassDetails = () => {
           {/* Tab Content */}
           {activeTab === 'overview' && (
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Class Overview</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Faculty Information - Now more prominent */}
+                <div className="lg:col-span-2 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 mb-6">
+                  <h2 className="text-xl font-semibold mb-6 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                    Faculty Information
+                  </h2>
+                  {classData.creator ? (
+                    <div className="flex items-center gap-6">
+                      <div className="relative">
+                        {classData.creator.picture ? (
+                          <img 
+                            src={getProfileImageUrl(classData.creator.picture)} 
+                            alt={classData.creator.name} 
+                            className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white shadow-lg"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = '';
+                              e.target.parentElement.innerHTML = `
+                                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white shadow-lg">
+                                  <span class="text-3xl font-bold">
+                                    ${classData.creator.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                              `;
+                            }}
+                          />
+                        ) : (
+                          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white shadow-lg">
+                            <span className="text-3xl font-bold">
+                              {classData.creator.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center shadow-lg">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                      
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-xl font-bold text-gray-900">{classData.creator.name}</h3>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                            Faculty
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <span className="text-gray-600">{classData.creator.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                              </svg>
+                            </div>
+                            <span className="text-gray-600">Computer Science</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Faculty information not available
+                    </div>
+                  )}
+                </div>
+
+                {/* About Section */}
                 <div>
                   <h3 className="text-lg font-medium mb-2">About</h3>
                   <p className="text-gray-700">
@@ -195,35 +268,42 @@ const ClassDetails = () => {
                     </div>
                   </dl>
                 </div>
-                
+
+                {/* Quick Stats */}
                 <div>
-                  <h3 className="text-lg font-medium mb-2">Faculty</h3>
-                  {classData.creator && (
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                      {classData.creator.picture ? (
-                        <img 
-                          src={getProfileImageUrl(classData.creator.picture)} 
-                          alt={classData.creator.name} 
-                          className="w-12 h-12 rounded-full object-cover"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = '';
-                            e.target.parentElement.innerHTML = `<div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white">
-                              ${classData.creator.name.charAt(0).toUpperCase()}
-                            </div>`;
-                          }}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white">
-                          {classData.creator.name.charAt(0).toUpperCase()}
+                  <h3 className="text-lg font-medium mb-4">Class Statistics</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-purple-50 rounded-xl p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
                         </div>
-                      )}
-                      <div>
-                        <p className="font-medium">{classData.creator.name}</p>
-                        <p className="text-sm text-gray-500">{classData.creator.email}</p>
+                        <div>
+                          <p className="text-sm text-purple-600 font-medium">Total Students</p>
+                          <p className="text-2xl font-bold text-purple-700">
+                            {classData.students?.length || 0}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  )}
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm text-blue-600 font-medium">Active Today</p>
+                          <p className="text-2xl font-bold text-blue-700">
+                            {classData.students?.filter(s => s.lastActive > Date.now() - 86400000).length || 0}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
