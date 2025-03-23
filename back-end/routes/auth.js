@@ -142,24 +142,53 @@ router.post('/google', async (req, res) => {
   }
 });
 
-// Update user profile (for students to set year and section)
+// Update user profile (for students to set year and section, and faculty to set experience and designation)
 router.post('/update-profile', auth, async (req, res) => {
   try {
-    const { year, section } = req.body;
+    const { year, section, experience, department, designation, role } = req.body;
+    console.log('Received profile update request:', req.body);
     
-    // Validate inputs
-    if (!year || !section) {
-      return res.status(400).json({ message: 'Year and section are required' });
+    // Validate inputs based on role
+    if (role === 'student') {
+      if (!year || !section) {
+        return res.status(400).json({ message: 'Year and section are required for students' });
+      }
+      
+      // Validate year format
+      if (!['1', '2', '3', '4'].includes(year)) {
+        return res.status(400).json({ message: 'Invalid year value' });
+      }
+      
+      // Validate section format
+      if (!['A', 'B', 'C'].includes(section)) {
+        return res.status(400).json({ message: 'Invalid section value' });
+      }
+      
+      // Update student profile
+      req.user.year = year;
+      req.user.section = section;
+      req.user.role = 'student';
+    } else if (role === 'faculty') {
+      if (!experience || !department || !designation) {
+        return res.status(400).json({ message: 'Experience, department, and designation are required for faculty' });
+      }
+      
+      // Validate experience is a positive number
+      const experienceNum = Number(experience);
+      if (isNaN(experienceNum) || experienceNum < 0) {
+        return res.status(400).json({ message: 'Experience must be a valid positive number' });
+      }
+      
+      // Update faculty profile
+      req.user.experience = experienceNum;
+      req.user.department = department;
+      req.user.designation = designation;
+      req.user.role = 'faculty';
+    } else {
+      return res.status(400).json({ message: 'Invalid role specified' });
     }
     
-    // Only students can update their year and section
-    if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'Only students can update year and section' });
-    }
-    
-    // Update user
-    req.user.year = year;
-    req.user.section = section;
+    console.log('Saving user with updated data:', req.user);
     await req.user.save();
     
     res.json({
@@ -171,12 +200,24 @@ router.post('/update-profile', auth, async (req, res) => {
         role: req.user.role,
         picture: req.user.picture,
         year: req.user.year,
-        section: req.user.section
+        section: req.user.section,
+        experience: req.user.experience,
+        department: req.user.department,
+        designation: req.user.designation
       }
     });
   } catch (error) {
     console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Failed to update profile', error: error.message });
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
+    res.status(500).json({ 
+      message: 'Failed to update profile', 
+      error: error.message 
+    });
   }
 });
 

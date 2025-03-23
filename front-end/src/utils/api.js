@@ -64,14 +64,18 @@ export const authAPI = {
   // Update user profile (for students to set year and section)
   updateProfile: async (profileData) => {
     try {
+      console.log('Sending profile update request with data:', profileData);
       const response = await api.post('/auth/update-profile', profileData);
+      console.log('Profile update response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Profile update API error:', error);
       if (error.response) {
+        console.error('Error status:', error.response.status);
         console.error('Error response data:', error.response.data);
+        throw new Error(error.response.data.message || 'Failed to update profile');
       }
-      throw error;
+      throw new Error('Network error while updating profile');
     }
   },
 
@@ -227,4 +231,4 @@ export const chatAPI = {
     const response = await api.post(`/chat/message/${threadId}`, messageData);
     return response.data;
   }
-}; 
+};

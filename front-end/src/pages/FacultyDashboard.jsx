@@ -40,6 +40,8 @@ const FacultyDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     className: '',
     subject: '',
@@ -62,6 +64,26 @@ const FacultyDashboard = () => {
   const [loadingFaculty, setLoadingFaculty] = useState(false);
   const navigate = useNavigate();
 
+  // Update the fetchDepartments function
+  const fetchDepartments = async () => {
+    try {
+      setLoadingDepartments(true);
+      // For now, we'll use hardcoded departments since we know the structure
+      setDepartments([
+        { id: 'CSE', name: 'Computer Science and Engineering' },
+        { id: 'ECE', name: 'Electronics and Communication Engineering' },
+        { id: 'EEE', name: 'Electrical and Electronics Engineering' },
+        { id: 'CIVIL', name: 'Civil Engineering' }
+      ]);
+      setError(null);
+    } catch (err) {
+      console.error('Error setting departments:', err);
+      setError('Failed to load departments. Please try again.');
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || '{}');
     if (!userData || !userData.id) {
@@ -70,8 +92,9 @@ const FacultyDashboard = () => {
     }
     setUser(userData);
     
-    // Fetch faculty's classes
+    // Fetch faculty's classes and departments
     fetchClasses();
+    fetchDepartments();
   }, [navigate]);
 
   useEffect(() => {
@@ -474,7 +497,7 @@ const FacultyDashboard = () => {
                       </span>
                     </div>
                   )}
-              <div>
+                  <div>
                     <h3 className="font-semibold text-gray-900">{user.name}</h3>
                     <p className="text-sm text-purple-600 font-medium">Faculty Member</p>
                   </div>
@@ -503,34 +526,45 @@ const FacultyDashboard = () => {
                     </div>
                     <span className="text-sm font-medium text-gray-600">Department</span>
                   </div>
-                  <p className="text-gray-900 font-medium pl-11">{user.department || 'CSE'}</p>
+                  {loadingDepartments ? (
+                    <div className="pl-11 flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm text-gray-500">Loading...</span>
+                    </div>
+                  ) : error ? (
+                    <p className="text-red-500 text-sm pl-11">{error}</p>
+                  ) : (
+                    <p className="text-gray-900 font-medium pl-11">
+                      {user?.department || 'Not assigned'}
+                    </p>
+                  )}
                 </div>
 
-                {/* Year */}
+                {/* Experience */}
                 <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
                       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <span className="text-sm font-medium text-gray-600">Year</span>
+                    <span className="text-sm font-medium text-gray-600">Experience</span>
                   </div>
-                  <p className="text-gray-900 font-medium pl-11">{user.year || 'Not assigned'}</p>
+                  <p className="text-gray-900 font-medium pl-11">{user?.experience ? `${user.experience} years` : 'Not specified'}</p>
                 </div>
 
-                {/* Section */}
+                {/* Designation */}
                 <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
                       <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
-                    <span className="text-sm font-medium text-gray-600">Section</span>
+                    <span className="text-sm font-medium text-gray-600">Designation</span>
                   </div>
-                  <p className="text-gray-900 font-medium pl-11">{user.section || 'Not assigned'}</p>
-              </div>
+                  <p className="text-gray-900 font-medium pl-11">{user?.designation || 'Not assigned'}</p>
+                </div>
               </div>
             </div>
           )}

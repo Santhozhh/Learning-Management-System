@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     sparse: true
   },
+  experience: {
+    type: Number,
+    sparse: true
+  },
+  designation: {
+    type: String,
+    sparse: true
+  },
   addedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
