@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+So this project will be using the Vite for the frontend and ExpressJS for the backend for the styling always use the tailwindcss latest version more than version 4 for the latest synatx and better stylings. 
+
+In the Backend we using MongoDB for the data storing and all the stuffs so also maintain the schema more efficient way for the changes if the schema changed also change the places where its also going to affected either in the front-end or in the back-end 
+
+The project idea is just as simple like the Google Classroom where we are trying to develop the more customized Learning Management System for our college.
+
+So there is an 2 users in the system. 
+    1. Student - Login with oAuth (Access: Student dashboard, Initially have to set the Year and section once its made it will not be able to change any further untill in the DB manually changing, While login have to grab their google drive access for uploading their assignments in their own drive and changes the read only permission to the student while the staff will get the full access)
+    2. Staff - Login with oAuth (Access: staff dashboard, Initially everyone get logged in as the normal student but afetr we need maintain a role for each user by default its an student, another one is super admin - changed only from the DB will not be able to change from the UI. The super admin can change the specific accounts to the staff which means after this change if the staff logins they will gets the access to the staff dashboard.)
+
+    Now the staff can create N number of classrooms which is specifically assigned for the particular year and section and the students who assigned them to that particular section adn year will gets automatically rolled in for the class.
+
+In the classroom there is an bunch of activities that user can be able to do just like the normal classrooms staff make assignments students work on it then submit and quizzes is there and also we have to make the each files upload or something that's not stored in the DB will be uploaded into their google drive and changes the access accordingly and just stores those links in the DB only that's all we have to do in the project.
+
+- You can @ files here
+- You can use markdown but dont have to

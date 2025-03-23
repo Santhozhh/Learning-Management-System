@@ -4,39 +4,52 @@ const userSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
+    trim: true
   },
   email: {
     type: String,
     required: true,
     unique: true,
-  },
-  password: {
-    type: String,
-    required: function() {
-      return !this.googleId; // Password is required only if not using Google auth
-    },
+    trim: true,
+    lowercase: true
   },
   googleId: {
     type: String,
-    sparse: true, // Allows null values but maintains unique index
+    sparse: true
+  },
+  password: {
+    type: String,
+    sparse: true
+  },
+  role: {
+    type: String,
+    enum: ['student', 'faculty', 'hod'],
+    default: 'student'
+  },
+  department: {
+    type: String,
+    sparse: true
   },
   picture: {
+    type: String
+  },
+  year: {
     type: String,
+    sparse: true
   },
-  isStudent: {
-    type: Boolean,
-    required: true,
+  section: {
+    type: String,
+    sparse: true
   },
-  dateOfBirth: {
-    type: Date,
-    required: function() {
-      return !this.googleId; // Date of birth is required only if not using Google auth
-    },
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+  addedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    sparse: true
+  }
+}, {
+  timestamps: true
 });
 
-module.exports = mongoose.model('User', userSchema); 
+const User = mongoose.model('User', userSchema);
+
+module.exports = User; 

@@ -8,7 +8,20 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: "http://localhost:5000"
+      },
+      '/googleusercontent': {
+        target: 'https://lh3.googleusercontent.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/googleusercontent/, '')
       }
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@react-oauth/google']
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
     }
   }
 })

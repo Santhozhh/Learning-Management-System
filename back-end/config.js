@@ -1,4 +1,6 @@
+require('dotenv').config();
+
 module.exports = {
-    mongodb: "mongodb+srv://santhosh:1KpNBuTNqDljLIk9@lms.xazt2.mongodb.net/?retryWrites=true&w=majority&appName=LMS"
-  };
+  mongodb: process.env.MONGODB_URI || 'mongodb+srv://lms-user:lms-password@cluster0.mongodb.net/LMS?retryWrites=true&w=majority'
+};
   
