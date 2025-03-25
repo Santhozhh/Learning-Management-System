@@ -5,7 +5,9 @@ const multer = require('multer');
 const auth = require('./middlewares/auth');
 const Material = require('../Schemas/Material');
 const Class = require('../Schemas/Class');
+const User = require('../Schemas/User');
 const googleDriveService = require('../services/googleDriveService');
+const { createNotification } = require('./notificationRoutes');
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -23,8 +25,111 @@ const authorize = (roles = []) => {
   };
 };
 
-// Upload material to a class (faculty/hod only)
-router.post('/:classId', auth, authorize(['faculty', 'hod']), upload.single('file'), async (req, res) => {
+// Upload material to a class via Cloudinary (faculty/hod only)
+router.post('/:classId', auth, authorize(['faculty', 'hod']), async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { title, description, fileUrl, fileId, fileName, mimeType, size } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: 'Invalid class ID' });
+    }
+    
+    if (!title || !fileUrl) {
+      return res.status(400).json({ message: 'Title and file URL are required' });
+    }
+    
+    // Check if class exists and user is the creator
+    const classDoc = await Class.findById(classId);
+    
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+    
+    if (classDoc.creator.toString() !== req.user._id.toString() && req.user.role !== 'hod') {
+      return res.status(403).json({ message: 'Access denied: You are not the creator of this class' });
+    }
+    
+    // Create new material document using Cloudinary URL
+    const newMaterial = new Material({
+      title,
+      description: description || '',
+      fileUrl: fileUrl,
+      fileId: fileId || 'cloudinary-file',
+      fileName: fileName || title,
+      mimeType: mimeType || 'application/octet-stream',
+      size: size || 0,
+      uploadedBy: req.user._id,
+      class: classId
+    });
+    
+    await newMaterial.save();
+    
+    // Add material reference to class
+    classDoc.materials.push(newMaterial._id);
+    await classDoc.save();
+    
+    // Create notifications for all students in the class
+    const notifyStudents = async () => {
+      try {
+        // Get all students in the class (specifically added or matching year/section)
+        const specificStudents = classDoc.students || [];
+        const yearSectionStudents = await User.find({
+          role: 'student',
+          year: classDoc.year,
+          section: classDoc.section
+        });
+        
+        // Combine both sets of students, removing duplicates
+        const allStudents = [...specificStudents];
+        
+        // Add year/section students that aren't already included
+        yearSectionStudents.forEach(student => {
+          if (!allStudents.some(s => s.toString() === student._id.toString())) {
+            allStudents.push(student._id);
+          }
+        });
+        
+        // Create notification for each student
+        for (const studentId of allStudents) {
+          await createNotification({
+            recipient: studentId,
+            sender: req.user._id,
+            type: 'material_uploaded',
+            title: 'New Material',
+            message: `A new material "${title}" has been uploaded in ${classDoc.className}`,
+            relatedClass: classId,
+            relatedMaterial: newMaterial._id
+          });
+        }
+      } catch (err) {
+        console.error('Error creating notifications:', err);
+      }
+    };
+    
+    // Run notifications in background
+    notifyStudents();
+    
+    res.status(201).json({
+      message: 'Material uploaded successfully',
+      material: {
+        id: newMaterial._id,
+        title: newMaterial.title,
+        description: newMaterial.description,
+        fileUrl: newMaterial.fileUrl,
+        fileName: newMaterial.fileName,
+        uploadedBy: req.user.name,
+        createdAt: newMaterial.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error uploading material:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Legacy upload endpoint for Google Drive integration
+router.post('/:classId/drive', auth, authorize(['faculty', 'hod']), upload.single('file'), async (req, res) => {
   try {
     const { classId } = req.params;
     const { title, description } = req.body;

@@ -133,17 +133,25 @@ export const classAPI = {
 export const materialAPI = {
   // Upload class material
   uploadMaterial: async (classId, materialData) => {
-    const formData = new FormData();
-    formData.append('title', materialData.title);
-    formData.append('description', materialData.description);
-    formData.append('file', materialData.file);
-
-    const response = await api.post(`/material/${classId}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    // If materialData contains a file property, use the FormData approach
+    if (materialData.file instanceof File) {
+      const formData = new FormData();
+      formData.append('title', materialData.title);
+      formData.append('description', materialData.description);
+      formData.append('file', materialData.file);
+      
+      const response = await api.post(`/material/${classId}/drive`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } 
+    // Otherwise use JSON for Cloudinary-uploaded files
+    else {
+      const response = await api.post(`/material/${classId}`, materialData);
+      return response.data;
+    }
   },
 
   // Get materials for a class
@@ -182,16 +190,34 @@ export const assignmentAPI = {
 
   // Submit an assignment (for students)
   submitAssignment: async (assignmentId, submissionData) => {
-    const formData = new FormData();
-    formData.append('notes', submissionData.notes);
-    formData.append('file', submissionData.file);
+    // If the file data is from Cloudinary
+    if (submissionData.file && submissionData.file.url) {
+      // Send the Cloudinary data directly as JSON
+      const response = await api.post(`/assignment/submit/${assignmentId}/cloudinary`, {
+        notes: submissionData.notes || '',
+        fileUrl: submissionData.file.url,
+        fileName: submissionData.file.fileName,
+        fileId: submissionData.file.publicId,
+        mimeType: submissionData.file.fileType,
+        size: submissionData.file.fileSize
+      });
+      return response.data;
+    } 
+    // For form data uploads (fallback)
+    else if (submissionData.file instanceof File) {
+      const formData = new FormData();
+      formData.append('notes', submissionData.notes || '');
+      formData.append('file', submissionData.file);
 
-    const response = await api.post(`/assignment/submit/${assignmentId}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+      const response = await api.post(`/assignment/submit/${assignmentId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } else {
+      throw new Error('Invalid file data for submission');
+    }
   },
 
   // Get submissions for an assignment (for faculty)
@@ -232,3 +258,38 @@ export const chatAPI = {
     return response.data;
   }
 };
+
+export const notificationAPI = {
+  // Get all notifications for current user
+  getNotifications: async () => {
+    const response = await api.get('/notifications');
+    return response.data;
+  },
+
+  // Get unread notification count
+  getUnreadCount: async () => {
+    const response = await api.get('/notifications/unread/count');
+    return response.data;
+  },
+
+  // Mark a notification as read
+  markAsRead: async (notificationId) => {
+    const response = await api.patch(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+
+  // Mark all notifications as read
+  markAllAsRead: async () => {
+    const response = await api.patch('/notifications/read/all');
+    return response.data;
+  },
+  
+  // Clear all notifications
+  clearAllNotifications: async () => {
+    const response = await api.delete('/notifications/clear/all');
+    return response.data;
+  }
+};
+
+export { api };
+export default api;

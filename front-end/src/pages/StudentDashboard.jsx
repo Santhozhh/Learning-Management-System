@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { classAPI } from '../utils/api';
 import ClassCard from '../components/ClassCard';
 import { FiMail, FiCalendar, FiUsers, FiBook, FiLogOut } from 'react-icons/fi';
+import NotificationBell from '../components/NotificationBell';
 
 // Helper function to process Google profile URLs
 const getProfileImageUrl = (url) => {
@@ -121,6 +122,7 @@ const StudentDashboard = () => {
               Student Dashboard
             </h1>
             <div className="flex items-center space-x-4">
+              <NotificationBell />
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors duration-200"

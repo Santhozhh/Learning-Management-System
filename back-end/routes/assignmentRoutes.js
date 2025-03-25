@@ -11,6 +11,7 @@ const Class = require('../Schemas/Class');
 const googleDriveService = require('../services/googleDriveService');
 const authService = require('../services/authService');
 const User = require('../Schemas/User');
+const { createNotification } = require('./notificationRoutes');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -81,6 +82,47 @@ router.post('/:classId', auth, authorize(['faculty', 'hod']), async (req, res) =
     // Add assignment reference to class
     classDoc.assignments.push(newAssignment._id);
     await classDoc.save();
+    
+    // Create notifications for all students in the class
+    const notifyStudents = async () => {
+      try {
+        // Get all students in the class (specifically added or matching year/section)
+        const specificStudents = classDoc.students || [];
+        const yearSectionStudents = await User.find({
+          role: 'student',
+          year: classDoc.year,
+          section: classDoc.section
+        });
+        
+        // Combine both sets of students, removing duplicates
+        const allStudents = [...specificStudents];
+        
+        // Add year/section students that aren't already included
+        yearSectionStudents.forEach(student => {
+          if (!allStudents.some(s => s.toString() === student._id.toString())) {
+            allStudents.push(student._id);
+          }
+        });
+        
+        // Create notification for each student
+        for (const studentId of allStudents) {
+          await createNotification({
+            recipient: studentId,
+            sender: req.user._id,
+            type: 'assignment_created',
+            title: 'New Assignment',
+            message: `A new assignment "${title}" has been posted in ${classDoc.className}`,
+            relatedClass: classId,
+            relatedAssignment: newAssignment._id
+          });
+        }
+      } catch (err) {
+        console.error('Error creating notifications:', err);
+      }
+    };
+    
+    // Run notifications in background
+    notifyStudents();
     
     res.status(201).json({
       message: 'Assignment created successfully',
@@ -156,6 +198,44 @@ router.get('/:classId', auth, async (req, res) => {
             fileUrl: submission.fileUrl,
             fileName: submission.fileName
           } : null
+        };
+      }));
+      
+      return res.json({ assignments: enrichedAssignments });
+    }
+    
+    // For faculty, fetch submissions details for each assignment
+    if (req.user.role === 'faculty' || req.user.role === 'hod') {
+      const enrichedAssignments = await Promise.all(assignments.map(async (assignment) => {
+        // Get all submissions for this assignment with student details
+        const submissions = await Submission.find({ assignment: assignment._id })
+          .populate('student', 'name email picture year section');
+        
+        return {
+          id: assignment._id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          totalPoints: assignment.totalPoints,
+          createdBy: assignment.createdBy,
+          createdAt: assignment.createdAt,
+          submissions: submissions.map(sub => ({
+            id: sub._id,
+            student: {
+              id: sub.student._id,
+              name: sub.student.name,
+              email: sub.student.email,
+              picture: sub.student.picture,
+              year: sub.student.year,
+              section: sub.student.section
+            },
+            submittedAt: sub.createdAt,
+            grade: sub.grade,
+            feedback: sub.feedback,
+            fileUrl: sub.fileUrl,
+            fileName: sub.fileName
+          })),
+          submissionCount: submissions.length
         };
       }));
       
@@ -306,6 +386,109 @@ router.post('/submit/:assignmentId', auth, authorize(['student']), upload.single
       fs.unlinkSync(req.file.path);
     }
     
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Submit an assignment with Cloudinary file (student only)
+router.post('/submit/:assignmentId/cloudinary', auth, authorize(['student']), async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { notes, fileUrl, fileName, fileId, mimeType, size } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+      return res.status(400).json({ message: 'Invalid assignment ID' });
+    }
+    
+    if (!fileUrl || !fileName) {
+      return res.status(400).json({ message: 'File URL and name are required' });
+    }
+    
+    // Find assignment
+    const assignment = await Assignment.findById(assignmentId).populate('class createdBy');
+    
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+    
+    // Check due date
+    if (new Date(assignment.dueDate) < new Date()) {
+      return res.status(400).json({ message: 'Assignment is past due date' });
+    }
+    
+    // Check if student is in the class
+    const classDoc = await Class.findById(assignment.class._id);
+    const isStudent = classDoc.students.some(student => student.toString() === req.user._id.toString());
+    const isYearSectionMatch = req.user.year === classDoc.year && req.user.section === classDoc.section;
+    
+    if (!isStudent && !isYearSectionMatch) {
+      return res.status(403).json({ message: 'Access denied: You are not part of this class' });
+    }
+    
+    // Check if student already submitted this assignment
+    const existingSubmission = await Submission.findOne({
+      assignment: assignmentId,
+      student: req.user._id
+    });
+    
+    if (existingSubmission) {
+      return res.status(400).json({ message: 'You have already submitted this assignment' });
+    }
+    
+    // Create submission
+    const newSubmission = new Submission({
+      assignment: assignmentId,
+      student: req.user._id,
+      fileUrl: fileUrl,
+      fileId: fileId,
+      fileName: fileName,
+      mimeType: mimeType || 'application/pdf',
+      size: size || 0,
+      notes: notes || ''
+    });
+    
+    await newSubmission.save();
+    
+    // Add submission reference to assignment
+    assignment.submissions.push(newSubmission._id);
+    await assignment.save();
+    
+    // Create notification for the faculty
+    const notifyFaculty = async () => {
+      try {
+        // The assignment creator (faculty)
+        const facultyId = assignment.createdBy._id;
+        
+        // Create notification
+        await createNotification({
+          recipient: facultyId,
+          sender: req.user._id,
+          type: 'assignment_submitted',
+          title: 'Assignment Submission',
+          message: `${req.user.name} has submitted the assignment "${assignment.title}"`,
+          relatedClass: assignment.class._id,
+          relatedAssignment: assignment._id,
+          relatedSubmission: newSubmission._id
+        });
+      } catch (err) {
+        console.error('Error creating faculty notification:', err);
+      }
+    };
+    
+    // Run notification in background
+    notifyFaculty();
+    
+    res.status(201).json({
+      message: 'Assignment submitted successfully',
+      submission: {
+        id: newSubmission._id,
+        fileUrl: newSubmission.fileUrl,
+        fileName: newSubmission.fileName,
+        submittedAt: newSubmission.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting assignment:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

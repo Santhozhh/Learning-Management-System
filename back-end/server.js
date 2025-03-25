@@ -8,6 +8,7 @@ const classRoutes = require('./routes/classRoutes');
 const materialRoutes = require('./routes/materialRoutes');
 const assignmentRoutes = require('./routes/assignmentRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const { router: notificationRoutes } = require('./routes/notificationRoutes');
 
 const app = express();
 
@@ -24,9 +25,10 @@ mongoose.connect(process.env.MONGODB_URI)
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/class', classRoutes);
-app.use('/api/materials', materialRoutes);
-app.use('/api/assignments', assignmentRoutes);
-app.use('/api/chats', chatRoutes);
+app.use('/api/material', materialRoutes);
+app.use('/api/assignment', assignmentRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Route for testing
 app.get('/api/test', (req, res) => {

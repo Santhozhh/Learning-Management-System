@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { classAPI, authAPI } from '../utils/api';
 import ClassCard from '../components/ClassCard';
 import { FiX, FiMail, FiPhone, FiBookOpen, FiCalendar } from 'react-icons/fi';
+import NotificationBell from '../components/NotificationBell';
 
 // Helper function to process Google profile URLs
 const getProfileImageUrl = (url) => {
@@ -12,25 +13,6 @@ const getProfileImageUrl = (url) => {
     return `/googleusercontent${url.split('googleusercontent.com')[1]}`;
   }
   return url;
-};
-
-// Add mock notifications (replace with actual API calls later)
-const mockNotifications = {
-  faculty: [
-    { id: 1, type: 'assignment', title: 'New Assignment Submissions', message: '5 new students submitted their assignments', time: '2 mins ago', read: false },
-    { id: 2, type: 'class', title: 'Class Schedule Updated', message: 'Your next class is scheduled for tomorrow', time: '1 hour ago', read: false },
-    { id: 3, type: 'announcement', title: 'Department Meeting', message: 'Monthly department meeting at 3 PM', time: '2 hours ago', read: true }
-  ],
-  hod: [
-    { id: 1, type: 'faculty', title: 'New Faculty Joined', message: 'Dr. Sarah Johnson joined the department', time: '5 mins ago', read: false },
-    { id: 2, type: 'department', title: 'Department Performance', message: 'Monthly statistics report is ready', time: '30 mins ago', read: false },
-    { id: 3, type: 'request', title: 'Role Change Request', message: 'New role change request pending approval', time: '1 hour ago', read: true }
-  ],
-  student: [
-    { id: 1, type: 'assignment', title: 'Assignment Due', message: 'Database Management System assignment due tomorrow', time: '10 mins ago', read: false },
-    { id: 2, type: 'grade', title: 'New Grade Posted', message: 'Your Web Development grade has been posted', time: '2 hours ago', read: false },
-    { id: 3, type: 'class', title: 'Class Cancelled', message: 'Tomorrow\'s morning class has been cancelled', time: '3 hours ago', read: true }
-  ]
 };
 
 const FacultyDashboard = () => {
@@ -55,9 +37,6 @@ const FacultyDashboard = () => {
   const [userRoleData, setUserRoleData] = useState({ userId: '', role: '' });
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [departmentStats, setDepartmentStats] = useState(null);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFacultyModal, setShowFacultyModal] = useState(false);
   const [facultyList, setFacultyList] = useState([]);
@@ -96,20 +75,6 @@ const FacultyDashboard = () => {
     fetchClasses();
     fetchDepartments();
   }, [navigate]);
-
-  useEffect(() => {
-    // Set notifications based on user role
-    if (user?.role === 'hod') {
-      setNotifications(mockNotifications.hod);
-      setUnreadCount(mockNotifications.hod.filter(n => !n.read).length);
-    } else if (user?.role === 'faculty') {
-      setNotifications(mockNotifications.faculty);
-      setUnreadCount(mockNotifications.faculty.filter(n => !n.read).length);
-    } else {
-      setNotifications(mockNotifications.student);
-      setUnreadCount(mockNotifications.student.filter(n => !n.read).length);
-    }
-  }, [user]);
 
   const fetchClasses = async () => {
     try {
@@ -269,130 +234,6 @@ const FacultyDashboard = () => {
     setUserRoleData(prev => ({ ...prev, [name]: value }));
   };
 
-  const markAsRead = (notificationId) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === notificationId 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    setUnreadCount(0);
-  };
-
-  // Add this inside the header section, right before the profile section
-  const notificationButton = (
-    <div className="relative">
-      <button
-        onClick={() => setShowNotifications(!showNotifications)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 focus:outline-none"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-        </svg>
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-            {unreadCount}
-          </span>
-        )}
-      </button>
-
-      {showNotifications && (
-        <div className="absolute right-0 mt-3 w-80 sm:w-96 z-50">
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-100">
-            <div className="p-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  Notifications
-                </h3>
-                <button
-                  onClick={markAllAsRead}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Mark all as read
-                </button>
-              </div>
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-              {notifications.map(notification => (
-                <div
-                  key={notification.id}
-                  className={`p-4 border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${
-                    !notification.read ? 'bg-blue-50/30' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-1 p-2 rounded-xl ${
-                      notification.type === 'assignment' ? 'bg-purple-100 text-purple-600' :
-                      notification.type === 'class' ? 'bg-blue-100 text-blue-600' :
-                      notification.type === 'announcement' ? 'bg-amber-100 text-amber-600' :
-                      notification.type === 'faculty' ? 'bg-green-100 text-green-600' :
-                      notification.type === 'grade' ? 'bg-indigo-100 text-indigo-600' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      {notification.type === 'assignment' && (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      )}
-                      {notification.type === 'class' && (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      )}
-                      {notification.type === 'announcement' && (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                        </svg>
-                      )}
-                      {notification.type === 'faculty' && (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                      )}
-                      {notification.type === 'grade' && (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="text-sm font-medium text-gray-900">{notification.title}</h4>
-                        <span className="text-xs text-gray-500">{notification.time}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                    </div>
-                  </div>
-                  {!notification.read && (
-                    <button
-                      onClick={() => markAsRead(notification.id)}
-                      className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Mark as read
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {notifications.length === 0 && (
-              <div className="p-4 text-center text-gray-500">
-                No notifications
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   const filteredClasses = classes.filter(classItem => 
     classItem.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
     classItem.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -434,7 +275,7 @@ const FacultyDashboard = () => {
             {isHoD ? 'Head of Department Dashboard' : 'Faculty Dashboard'}
           </h1>
           <div className="flex items-center space-x-4">
-            {notificationButton}
+            <NotificationBell />
             <div className="flex items-center space-x-2">
               {user.picture && !showDefaultAvatar ? (
                 <img 
