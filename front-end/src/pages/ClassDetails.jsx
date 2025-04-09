@@ -42,6 +42,11 @@ const ClassDetails = () => {
   const [submissionFile, setSubmissionFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [currentAssignmentId, setCurrentAssignmentId] = useState(null);
+  const [showGradeModal, setShowGradeModal] = useState(false);
+  const [currentSubmissionId, setCurrentSubmissionId] = useState(null);
+  const [gradeData, setGradeData] = useState({ marks: '', feedback: '' });
+  const [grading, setGrading] = useState(false);
+  const [gradeError, setGradeError] = useState(null);
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -285,6 +290,99 @@ const ClassDetails = () => {
       setSubmissionError(err.response?.data?.message || err.message || 'Failed to submit assignment. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEnterMarks = (submissionId) => {
+    setCurrentSubmissionId(submissionId);
+    setGradeData({ marks: '', feedback: '' });
+    setGradeError(null);
+    setShowGradeModal(true);
+  };
+
+  const handleGradeChange = (e) => {
+    const { name, value } = e.target;
+    setGradeData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const submitGrade = async () => {
+    try {
+      setGrading(true);
+      setGradeError(null);
+      
+      if (!gradeData.marks) {
+        throw new Error('Please enter marks for the submission');
+      }
+      
+      // Convert marks to a number
+      const marks = parseFloat(gradeData.marks);
+      
+      // Validate marks
+      if (isNaN(marks) || marks < 0) {
+        throw new Error('Please enter a valid marks value');
+      }
+      
+      // Find the current assignment to get the total points
+      const currentAssignment = assignments.find(assignment => 
+        assignment.submissions?.some(sub => sub.id === currentSubmissionId)
+      );
+      
+      if (!currentAssignment) {
+        throw new Error('Assignment not found');
+      }
+      
+      // Validate against total points
+      if (marks > currentAssignment.totalPoints) {
+        throw new Error(`Marks cannot exceed the total points (${currentAssignment.totalPoints})`);
+      }
+      
+      // Log the data being sent
+      console.log('Submitting grade with data:', {
+        marks,
+        feedback: gradeData.feedback || ''
+      });
+      
+      // Submit the grade
+      const response = await assignmentAPI.gradeSubmission(currentSubmissionId, {
+        marks,
+        feedback: gradeData.feedback || ''
+      });
+      
+      console.log('Grade submitted successfully:', response);
+      
+      // Update the assignments state with the new grade
+      setAssignments(prev => 
+        prev.map(assignment => {
+          if (assignment.submissions) {
+            return {
+              ...assignment,
+              submissions: assignment.submissions.map(submission => {
+                if (submission.id === currentSubmissionId) {
+                  return {
+                    ...submission,
+                    marks: response.submission.marks,
+                    feedback: response.submission.feedback
+                  };
+                }
+                return submission;
+              })
+            };
+          }
+          return assignment;
+        })
+      );
+      
+      // Close the modal
+      setShowGradeModal(false);
+      
+      // Show success message
+      alert('Marks submitted successfully!');
+      
+    } catch (err) {
+      console.error('Error submitting grade:', err);
+      setGradeError(err.message || 'Failed to submit marks. Please try again.');
+    } finally {
+      setGrading(false);
     }
   };
 
@@ -749,6 +847,9 @@ const ClassDetails = () => {
                                 <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">Open</span>
                               )}
                             </div>
+                            <div className="text-sm text-gray-500">
+                              Total Marks: {assignment.totalPoints}
+                            </div>
                           </div>
                           
                           {user?.role === 'student' && (
@@ -888,61 +989,13 @@ const ClassDetails = () => {
                                           Download
                                         </a>
                                         <button
-                                          onClick={() => {
-                                            // Handle PDF files specially for Firefox
-                                            const isPdf = submission.fileName?.toLowerCase().endsWith('.pdf');
-                                            if (isPdf) {
-                                              // Create a loading indicator
-                                              const loadingElement = document.createElement('div');
-                                              loadingElement.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50';
-                                              loadingElement.innerHTML = `
-                                                <div class="bg-white rounded-lg p-4 flex flex-col items-center">
-                                                  <div class="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-                                                  <span class="text-sm font-medium">Preparing PDF...</span>
-                                                </div>
-                                              `;
-                                              document.body.appendChild(loadingElement);
-                                              
-                                              // First download, then open
-                                              fetch(submission.fileUrl)
-                                                .then(response => response.blob())
-                                                .then(blob => {
-                                                  const blobUrl = window.URL.createObjectURL(blob);
-                                                  
-                                                  // Create download link
-                                                  const link = document.createElement('a');
-                                                  link.href = blobUrl;
-                                                  link.download = submission.fileName || 'download.pdf';
-                                                  link.style.display = 'none';
-                                                  document.body.appendChild(link);
-                                                  link.click();
-                                                  
-                                                  // Open in new tab
-                                                  setTimeout(() => {
-                                                    window.open(blobUrl, '_blank');
-                                                    window.URL.revokeObjectURL(blobUrl);
-                                                    document.body.removeChild(loadingElement);
-                                                  }, 1000);
-                                                  
-                                                  document.body.removeChild(link);
-                                                })
-                                                .catch(error => {
-                                                  console.error('Error handling PDF:', error);
-                                                  document.body.removeChild(loadingElement);
-                                                  window.open(submission.fileUrl, '_blank');
-                                                });
-                                            } else {
-                                              // For non-PDFs, just open
-                                              window.open(submission.fileUrl, '_blank');
-                                            }
-                                          }}
-                                          className="px-3 py-1.5 bg-green-100 hover:bg-green-200 rounded-lg text-sm font-medium flex items-center gap-1"
+                                          onClick={() => handleEnterMarks(submission.id)}
+                                          className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 rounded-lg text-sm font-medium flex items-center gap-1"
                                         >
                                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                                           </svg>
-                                          View
+                                          Enter Marks
                                         </button>
                                       </div>
                                     </div>
@@ -951,6 +1004,9 @@ const ClassDetails = () => {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                       </svg>
                                       <span className="text-sm font-medium">{submission.fileName || 'Submitted File'}</span>
+                                      {submission.marks && (
+                                        <span className="ml-auto text-sm font-medium text-blue-600">Marks: {submission.marks}</span>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -1086,6 +1142,22 @@ const ClassDetails = () => {
                           className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
                         />
                       </div>
+
+                      <div>
+                        <label htmlFor="totalPoints" className="block text-sm font-medium text-gray-700 mb-1">
+                          Total Marks
+                        </label>
+                        <input
+                          type="number"
+                          id="totalPoints"
+                          name="totalPoints"
+                          value={assignmentForm.totalPoints}
+                          onChange={handleAssignmentFormChange}
+                          required
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                          placeholder="Enter total marks for the assignment"
+                        />
+                      </div>
                       
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1194,6 +1266,94 @@ const ClassDetails = () => {
                         className="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl font-medium shadow-md hover:shadow-lg transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
                       >
                         {submitting ? 'Processing...' : 'Submit Assignment'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Grade Submission Modal */}
+              {showGradeModal && (
+                <div className="fixed inset-0 flex items-center justify-center z-50" style={{ alignItems: 'flex-start', paddingTop: 'calc(5rem + env(safe-area-inset-top))' }}>
+                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !grading && setShowGradeModal(false)}></div>
+                  <div className="relative bg-gradient-to-br from-white to-purple-50/90 rounded-2xl p-8 max-w-lg w-full shadow-2xl border border-purple-100/20 transform transition-all duration-300 scale-100 opacity-100 animate-fadeIn">
+                    <div className="flex flex-col items-center text-center mb-8">
+                      <div className="w-20 h-20 bg-gradient-to-br from-purple-200 to-blue-200 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                        <svg className="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-2xl font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
+                        Enter Marks
+                      </h3>
+                      <p className="text-gray-500">Grade the student's submission</p>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <div>
+                        <label htmlFor="marks" className="block text-sm font-medium text-gray-700 mb-1">
+                          Marks
+                        </label>
+                        <input
+                          type="number"
+                          id="marks"
+                          name="marks"
+                          value={gradeData.marks}
+                          onChange={handleGradeChange}
+                          required
+                          min="0"
+                          step="0.1"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                          placeholder="Enter marks"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-1">
+                          Feedback (Optional)
+                        </label>
+                        <textarea
+                          id="feedback"
+                          name="feedback"
+                          value={gradeData.feedback}
+                          onChange={handleGradeChange}
+                          rows={4}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                          placeholder="Provide feedback on the submission"
+                        />
+                      </div>
+                      
+                      {gradeError && (
+                        <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600 flex items-center justify-center gap-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {gradeError}
+                        </div>
+                      )}
+                      
+                      {grading && (
+                        <div className="p-6 flex flex-col items-center justify-center gap-4">
+                          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                          <p className="text-purple-700 font-medium">Submitting grade...</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-center gap-4 mt-6">
+                      <button 
+                        onClick={() => setShowGradeModal(false)}
+                        disabled={grading}
+                        className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={submitGrade}
+                        disabled={grading || !gradeData.marks}
+                        className="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl font-medium shadow-md hover:shadow-lg transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {grading ? 'Processing...' : 'Submit Grade'}
                       </button>
                     </div>
                   </div>

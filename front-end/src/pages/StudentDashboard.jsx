@@ -108,6 +108,25 @@ const StudentDashboard = () => {
     classItem.faculty?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const submitAssignment = async () => {
+    // ... existing code ...
+    setAssignments(prev => 
+      prev.map(assignment => {
+        if (assignment.id === currentAssignmentId) {
+          return {
+            ...assignment,
+            submissions: [
+              ...(assignment.submissions || []),
+              response.submission
+            ]
+          };
+        }
+        return assignment;
+      })
+    );
+    // ... existing code ...
+  };
+
   if (!user) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
