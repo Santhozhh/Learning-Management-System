@@ -1,4 +1,4 @@
-# Leave Management System
+# Learning Management System
 
 A comprehensive platform for managing academic activities including class materials, assignments, and communication between students and faculty.
 
